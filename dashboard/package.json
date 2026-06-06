@@ -1,0 +1,14 @@
+{
+  "name": "pic32-dashboard",
+  "version": "1.0.0",
+  "description": "Web dashboard for PIC32MK MCJ Curiosity Pro board — displays RPM and motor direction",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "serialport": "^12.0.0",
+    "ws": "^8.16.0"
+  }
+}

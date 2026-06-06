@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PIC32MK Motor Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>PIC32MK MCJ Curiosity Pro</h1>
+    <span id="status-badge" class="badge disconnected">Disconnected</span>
+    <button id="btn-ports" class="btn-link">Change Port</button>
+  </header>
+
+  <main>
+    <section class="card rpm-card">
+      <h2>Motor Speed</h2>
+      <div class="rpm-display">
+        <span id="rpm-value">0</span>
+        <span class="rpm-unit">RPM</span>
+      </div>
+      <div class="rpm-bar-track">
+        <div id="rpm-bar" class="rpm-bar-fill" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <section class="card direction-card">
+      <h2>Motor Direction</h2>
+      <div id="direction-indicator" class="direction-indicator stopped">
+        <span id="direction-icon" class="direction-icon">&#9632;</span>
+        <span id="direction-label">STOPPED</span>
+      </div>
+    </section>
+
+    <section class="card info-card">
+      <h2>Connection</h2>
+      <table>
+        <tr><td>Port</td><td id="port-info">—</td></tr>
+        <tr><td>Baud</td><td id="baud-info">—</td></tr>
+        <tr><td>Status</td><td id="conn-status">Disconnected</td></tr>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    <span id="timestamp"></span>
+  </footer>
+
+  <!-- Port selection modal -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <h2>Select Serial Port</h2>
+      <div id="port-list" class="port-list">
+        <p class="muted">Scanning for ports...</p>
+      </div>
+      <div class="port-baud">
+        <label for="baud-input">Baud rate:</label>
+        <input type="number" id="baud-input" value="115200" min="9600" max="921600">
+      </div>
+      <div class="modal-actions">
+        <button id="btn-refresh" class="btn">Refresh</button>
+        <button id="btn-connect" class="btn btn-primary" disabled>Connect</button>
+      </div>
+      <p id="modal-error" class="modal-error"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

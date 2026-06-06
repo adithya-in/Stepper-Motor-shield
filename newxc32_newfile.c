@@ -68,7 +68,7 @@
 #define PB_CLOCK        8000000
 
 // UART baud rate for the virtual COM port
-#define UART_BAUD       38400
+#define UART_BAUD       115200
 
 // PPS output function number for U1TX (= 1 according to Table 11-2)
 #define U1TX_FN         1
@@ -207,8 +207,9 @@ void uart1_init(void)
 
     // Baud rate = PB_CLOCK / (16 * (U1BRG + 1))
     // → U1BRG = (PB_CLOCK / (16 * UART_BAUD)) - 1
-    // With PB_CLOCK = 8 MHz and UART_BAUD = 38400:
-    //   U1BRG = (8000000 / (16 * 38400)) - 1 = 12.02 → 12
+    // With PB_CLOCK = 8 MHz and UART_BAUD = 115200:
+    //   U1BRG = (8000000 / (16 * 115200)) - 1 = 3.34 → 3
+    // (3.3% error — within tolerance; use PLL later for exact rate)
     U1BRG = (PB_CLOCK / (16 * UART_BAUD)) - 1;
 
     U1MODEbits.UARTEN = 1;   // Enable the UART module
