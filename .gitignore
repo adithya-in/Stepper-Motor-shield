@@ -1,0 +1,9 @@
+# MPLABX build artefacts
+build/
+dist/
+debug/
+.generated_files/
+nbproject/private/
+
+# OS
+.DS_Store
