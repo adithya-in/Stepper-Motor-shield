@@ -135,7 +135,7 @@ async function connectToPort() {
   if (!selectedPort) return;
   els.btnConnect.disabled = true;
   els.modalError.textContent = '';
-  const baud = parseInt(document.getElementById('baud-input').value, 10) || 115200;
+  const baud = parseInt(document.getElementById('baud-input').value, 10) || 19200;
   try {
     const res = await fetch('/api/connect', {
       method: 'POST',

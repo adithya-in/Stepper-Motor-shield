@@ -5,7 +5,7 @@ const { SerialPort } = require('serialport');
 const path = require('path');
 
 const PORT = process.env.UI_PORT || 3000;
-const DEFAULT_BAUD = parseInt(process.env.SERIAL_BAUD || '115200', 10);
+const DEFAULT_BAUD = parseInt(process.env.SERIAL_BAUD || '19200', 10);
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
