@@ -155,6 +155,16 @@ function parseLine(line) {
 
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify(latestData));
+
+  ws.on('message', (data) => {
+    if (!serial || !serial.isOpen) return;
+    try {
+      const msg = JSON.parse(data.toString());
+      if (msg.command) {
+        serial.write(msg.command + '\n');
+      }
+    } catch (_) {}
+  });
 });
 
 server.listen(PORT, () => {

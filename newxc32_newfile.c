@@ -1,23 +1,5 @@
-/*
- * AS5047U Rotary Encoder → PIC32MK MCJ Curiosity Pro (QEI + UART)
- * =====================================================================
- *
- * HARDWARE CONNECTION (AS5047U TSSOP-14 to Motor Control Header):
- *
- *   AS5047U pin 7 (A)  → MC header pin 27  → PIC32MK RPG6 (QEA1 input)
- *   AS5047U pin 6 (B)  → MC header pin 29  → PIC32MK RPG7 (QEB1 input)
- *   AS5047U pin 14 (I) → MC header pin 28  → PIC32MK RA7  (optional index)
- *   AS5047U pin 1 (CSn)→ VDD via 10k pull-up       (SPI not used)
- *   AS5047U pin 2 (CLK)→ GND via 10k pull-down
- *   AS5047U pin 4 (MOSI)→ GND via 10k pull-down
- *   AS5047U pin 3 (MISO)→ leave open
- *   AS5047U pin 5 (TEST)→ GND
- *   AS5047U pin 11 (VDD)→ 5V supply rail
- *   AS5047U pin 12 (VDD3V3)→ 1uF cap to GND
- *   AS5047U pin 13 (GND)→ GND
- */
-
 #include <xc.h>
+#include <sys/attribs.h>
 
 #pragma config FNOSC   = FRC
 #pragma config POSCMOD = OFF
@@ -26,25 +8,25 @@
 #pragma config ICESEL  = ICS_PGx2
 #pragma config JTAGEN  = OFF
 
-#define ENCODER_PPR     4096
-#define SAMPLE_MS       500
-// PB1 clock defaults to SYSCLK/2 (divide-by-2), so PB1CLK = 4 MHz
-// At 4 MHz, 19200 baud gives 0.16% error (U1BRG = 12)
-#define PB_CLOCK        4000000
-#define UART_BAUD       19200
-#define U1TX_FN         1
-#define PPS_RPG6        10
-#define PPS_RPG7        10
-#define U1RX_PIN_VAL    1
+#define PB_CLOCK    4000000
+#define STEP_RATE   1000
+#define DIR_CW      0
+#define DIR_CCW     1
+#define ENA_ON      0
+#define ENA_OFF     1
+#define OC1_FN      5
+#define ENCODER_PPR 4096
 
-typedef struct {
-    int rpm;
-    int dir;
-} rpm_result;
+#define DIR_PIN     LATBbits.LATB14
+#define ENA_PIN     LATBbits.LATB13
+#define LED_PIN     LATAbits.LATA10
 
-static inline unsigned int core_ticks(void)
+static inline uint32_t core_ticks(void) { return _CP0_GET_COUNT(); }
+
+static void msleep(uint32_t ms)
 {
-    return _CP0_GET_COUNT();
+    uint32_t start = core_ticks();
+    while ((core_ticks() - start) < (ms * 4000u));
 }
 
 static void syskey_unlock(void)
@@ -53,24 +35,58 @@ static void syskey_unlock(void)
     SYSKEY = 0x556699AA;
 }
 
-static void pps_unlock(void)
+// ── UART ─────────────────────────────────────────────────────────────
+static void uart_init(void)
 {
     syskey_unlock();
-    CFGCON &= ~((1 << 11) | (1 << 12) | (1 << 13));
+    CFGCONbits.IOLOCK = 0;
+    RPE0R = 1;              // U1TX → RPE0
+    U1RXR = 1;              // U1RX from PPS input #1
+    syskey_unlock();
+    CFGCONbits.IOLOCK = 1;
+
+    ANSELECLR = (1 << 0);
+    TRISECLR  = (1 << 0);
+    U1MODE = 0;
+    U1BRG = (PB_CLOCK / (16 * 19200)) - 1;
+    U1MODEbits.UARTEN = 1;
+    U1STAbits.UTXEN   = 1;
 }
 
-static void pps_lock(void)
+static void uart_putchar(char c)
+{
+    while (U1STAbits.UTXBF);
+    U1TXREG = c;
+}
+
+static void uart_puts(const char *s)
+{
+    while (*s) uart_putchar(*s++);
+}
+
+static void uart_putint(int val)
+{
+    char buf[12], *p = buf + sizeof(buf) - 1;
+    int neg = 0;
+    if (val < 0) { neg = 1; val = -val; }
+    *p = '\0';
+    if (val == 0) { *--p = '0'; }
+    else { while (val) { *--p = '0' + (val % 10); val /= 10; } }
+    if (neg) *--p = '-';
+    uart_puts(p);
+}
+
+// ── Encoder (QEI1) ───────────────────────────────────────────────────
+static int  encoder_dir;
+static int  encoder_rpm;
+static void qei_init(void)
 {
     syskey_unlock();
-    CFGCON |= (1 << 13);
-}
-
-void qei1_init(void)
-{
-    pps_unlock();
-    QEA1R = PPS_RPG6;
-    QEB1R = PPS_RPG7;
-    pps_lock();
+    CFGCONbits.IOLOCK = 0;
+    QEA1R = 10;             // FIXME: PPS input number for RPG6
+    QEB1R = 10;             // FIXME: PPS input number for RPG7
+    syskey_unlock();
+    CFGCONbits.IOLOCK = 1;
 
     ANSELGCLR = (1 << 6) | (1 << 7);
     TRISGSET  = (1 << 6) | (1 << 7);
@@ -79,121 +95,123 @@ void qei1_init(void)
     QEI1IOC = 0;
     QEI1IOCbits.QEA    = 1;
     QEI1IOCbits.QEB    = 1;
-    QEI1IOCbits.INDEX  = 0;
     QEI1IOCbits.QCAPEN = 1;
     QEI1CONbits.CCM    = 0;
     QEI1CONbits.QEIEN  = 1;
 }
 
-void uart1_init(void)
+static void encoder_poll(void)
 {
-    pps_unlock();
-    U1RXR = U1RX_PIN_VAL;
-    RPE0R = U1TX_FN;
-    pps_lock();
+    static uint32_t last_pos  = 0;
+    static uint32_t last_tick = 0;
+    static int      inited    = 0;
 
-    ANSELECLR = (1 << 0);
-    TRISECLR  = (1 << 0);
-    ANSELGCLR = (1 << 8);
-    TRISGSET  = (1 << 8);
-
-    U1MODE = 0;
-    U1BRG = (PB_CLOCK / (16 * UART_BAUD)) - 1;
-    U1MODEbits.UARTEN = 1;
-    U1STAbits.UTXEN   = 1;
-}
-
-void uart_putchar(char c)
-{
-    while (U1STAbits.UTXBF);
-    U1TXREG = c;
-}
-
-void uart_puts(const char *s)
-{
-    while (*s)
-        uart_putchar(*s++);
-}
-
-void uart_putint(int val)
-{
-    char buf[12];
-    char *p = buf + sizeof(buf) - 1;
-    int neg = 0;
-
-    if (val < 0) { neg = 1; val = -val; }
-
-    *p = '\0';
-    if (val == 0) {
-        *--p = '0';
-    } else {
-        while (val) {
-            *--p = '0' + (val % 10);
-            val /= 10;
-        }
+    if (!inited) {
+        last_pos  = POS1CNT;
+        last_tick = core_ticks();
+        inited    = 1;
+        return;
     }
 
-    if (neg) *--p = '-';
-    uart_puts(p);
+    uint32_t pos  = POS1CNT;
+    uint32_t tick = core_ticks();
+    uint32_t dt   = tick - last_tick;
+
+    if (dt < (1000 * 4000u)) return;
+
+    int32_t delta = (int32_t)(pos - last_pos);
+    int dt_ms = dt / 4000u;
+
+    encoder_dir  = (delta > 0) - (delta < 0);
+    encoder_rpm  = (dt_ms > 0) ? (int)((int64_t)(delta > 0 ? delta : -delta) * 60000 / (ENCODER_PPR * 4 * dt_ms)) : 0;
+
+    last_pos  = pos;
+    last_tick = tick;
 }
 
-rpm_result calc_rpm(unsigned int *last_pos, unsigned int *last_tick)
+// ── Motor (TB6600 via OC1) ───────────────────────────────────────────
+static void motor_init(void)
 {
-    rpm_result res = {0, 0};
+    syskey_unlock();
+    CFGCONbits.IOLOCK = 0;
+    RPB15R = OC1_FN;
+    syskey_unlock();
+    CFGCONbits.IOLOCK = 1;
 
-    unsigned int pos  = POS1CNT;
-    unsigned int tick = core_ticks();
-    unsigned int dt_ticks = tick - *last_tick;
+    ANSELBCLR = (1 << 13) | (1 << 14);
+    TRISBCLR  = (1 << 13) | (1 << 14);
 
-    if (dt_ticks < (SAMPLE_MS * 4000u))
-        return res;
+    DIR_PIN = DIR_CW;
+    ENA_PIN = ENA_OFF;
 
-    int delta    = (int)(pos - *last_pos);
-    int dt_ms    = dt_ticks / 4000u;
-
-    *last_pos  = pos;
-    *last_tick = tick;
-
-    res.dir = (delta >= 0) ? 1 : -1;
-    if (delta < 0) delta = -delta;
-
-    if (dt_ms > 0) {
-        res.rpm = (int)((long long)delta * 60000
-                     / (ENCODER_PPR * 4 * dt_ms));
-    }
-
-    return res;
+    T2CON = 0;
+    T2CONbits.TCKPS = 0;
+    PR2 = (PB_CLOCK / STEP_RATE) - 1;
+    TMR2 = 0;
+    OC1CON = 0;
+    OC1R  = PR2 >> 1;
+    OC1RS = PR2 >> 1;
+    OC1CONbits.OCM    = 0b110;
+    OC1CONbits.OCTSEL = 0;
+    T2CONbits.ON = 1;
+    OC1CONbits.ON = 1;
 }
 
+static void motor_run(int dir)
+{
+    DIR_PIN = dir;
+    ENA_PIN = ENA_ON;
+}
+
+static void motor_stop(void)
+{
+    OC1CONbits.ON = 0;
+    ENA_PIN = ENA_OFF;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────
 int main(void)
 {
     ANSELA = 0;
     TRISACLR = (1 << 10);
-    LATACLR  = (1 << 10);
+    LED_PIN = 0;
 
-    qei1_init();
-    uart1_init();
+    uart_init();
+    qei_init();
+    motor_init();
 
-    uart_puts("\r\nAS5047U QEI RPM Monitor\r\n");
+    uart_puts("\r\n===== MOTOR TEST =====\r\n");
+    uart_puts("Motor: STOPPED, Encoder: IDLE\r\n");
+    msleep(2000);
 
-    unsigned int last_pos  = 0;
-    unsigned int last_tick = core_ticks();
-
-    while (1)
+    for (;;)
     {
-        rpm_result r = calc_rpm(&last_pos, &last_tick);
-
-        if (r.dir != 0)
-        {
-            uart_puts("RPM: ");
-            uart_putint(r.rpm);
-            uart_puts("  Dir: ");
-            uart_puts(r.dir > 0 ? "FWD" : "REV");
+        // ── CW 5s ──
+        uart_puts("\r\n>> CW 5s\r\n");
+        motor_run(DIR_CW);
+        for (int i = 0; i < 5; i++) {
+            msleep(1000);
+            encoder_poll();
+            uart_puts("CW  RPM:");
+            uart_putint(encoder_rpm);
+            uart_puts("  Encoder:");
+            uart_puts(encoder_dir > 0 ? "FWD" : encoder_dir < 0 ? "REV" : "IDLE");
             uart_puts("\r\n");
+            LED_PIN = !LED_PIN;
         }
 
-        LATAbits.LATA10 = !LATAbits.LATA10;
+        // ── CCW 5s ──
+        uart_puts("\r\n>> CCW 5s\r\n");
+        motor_run(DIR_CCW);
+        for (int i = 0; i < 5; i++) {
+            msleep(1000);
+            encoder_poll();
+            uart_puts("CCW RPM:");
+            uart_putint(encoder_rpm);
+            uart_puts("  Encoder:");
+            uart_puts(encoder_dir > 0 ? "FWD" : encoder_dir < 0 ? "REV" : "IDLE");
+            uart_puts("\r\n");
+            LED_PIN = !LED_PIN;
+        }
     }
-
-    return 0;
 }

@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.0.0 — 2026-06-09
+
+Second release. Adds TB6600 stepper driver control and full documentation of the testing journey.
+
+### Features
+- TB6600 NEMA17 stepper control via OC1 (hardware PWM step generation)
+- OC1 + Timer2: 50% duty PWM at configurable `STEP_RATE` (default 1 kHz)
+- Step output on RPB15 (OC1, pin 44), mapped via PPS (`RPB15R = OC1_FN`)
+- Direction on RPB14 (LOW=CW, HIGH=CCW)
+- Enable on RPB13 (LOW=enable — critical discovery for common-anode wiring)
+- CW 5 s → CCW 5 s test loop with UART RPM reporting
+- LED (RA10) heartbeat/second indicator
+
+### Bug Fixes
+- **ENA polarity**: Initial firmware assumed ENA+ HIGH = enable. In common-anode wiring, TB6600 optocoupler is active-low: LOW = optocoupler OFF = driver enabled. Fixed by setting `ENA_ON = 0`.
+
+### Documentation
+- `docs/TESTS.md` — Full journey log from Arduino prototyping through PIC32MK integration
+- `docs/PINOUT.md` — Complete wiring reference with physical pin numbers
+- `tests/arduino/` — Arduino validation test code (standalone .ino + PlatformIO project)
+
 ## v1.0.0 — 2026-06-08
 
 First working release. Firmware reads RPM and direction from an AS5047U magnetic encoder via QEI1, and outputs values over UART (19200 baud) to a web dashboard.

@@ -1,4 +1,5 @@
 const MAX_RPM = 3000;
+const MAX_SPEED_STEP = 20000;
 
 const els = {
   rpmValue: document.getElementById('rpm-value'),
@@ -18,11 +19,20 @@ const els = {
   btnPorts: document.getElementById('btn-ports'),
   modalError: document.getElementById('modal-error'),
   baudInput: document.getElementById('baud-input'),
+  btnDir: document.getElementById('btn-dir'),
+  btnMotor: document.getElementById('btn-motor'),
+  speedSlider: document.getElementById('speed-slider'),
+  speedLabel: document.getElementById('speed-label'),
 };
+
+let motorDir = 'CW';
+let motorOn = false;
 
 const DIRECTION_MAP = {
   FORWARD:  { icon: '\u25B6', label: 'FORWARD' },
+  FWD:      { icon: '\u25B6', label: 'FORWARD' },
   REVERSE:  { icon: '\u25C0', label: 'REVERSE' },
+  REV:      { icon: '\u25C0', label: 'REVERSE' },
   BACKWARD: { icon: '\u25C0', label: 'REVERSE' },
   CW:       { icon: '\u25B6', label: 'FORWARD' },
   CCW:      { icon: '\u25C0', label: 'REVERSE' },
@@ -169,7 +179,44 @@ ws.onclose = () => {
   updateConnection({ connected: false, port: null });
 };
 
+function sendCmd(cmd) {
+  const msg = JSON.stringify({ command: cmd });
+  ws.send(msg);
+}
+
+function toggleDir() {
+  motorDir = (motorDir === 'CW') ? 'CCW' : 'CW';
+  els.btnDir.textContent = motorDir;
+  sendCmd(motorDir);
+}
+
+function toggleMotor() {
+  motorOn = !motorOn;
+  if (motorOn) {
+    els.btnMotor.textContent = 'MOTOR ON';
+    els.btnMotor.className = 'btn btn-motor-on';
+    sendCmd('ON');
+  } else {
+    els.btnMotor.textContent = 'MOTOR OFF';
+    els.btnMotor.className = 'btn btn-motor-off';
+    els.speedSlider.value = 0;
+    els.speedLabel.textContent = '0%';
+    sendCmd('OFF');
+  }
+}
+
+function setSpeed() {
+  const pct = parseInt(els.speedSlider.value, 10);
+  els.speedLabel.textContent = pct + '%';
+  const steps = Math.round((pct / 100) * MAX_SPEED_STEP);
+  sendCmd('SPEED ' + steps);
+}
+
 // --- Events ---
+els.btnDir.addEventListener('click', toggleDir);
+els.btnMotor.addEventListener('click', toggleMotor);
+els.speedSlider.addEventListener('input', setSpeed);
+
 els.btnPorts.addEventListener('click', showModal);
 els.btnRefresh.addEventListener('click', fetchPorts);
 els.btnConnect.addEventListener('click', connectToPort);

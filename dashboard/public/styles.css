@@ -173,6 +173,84 @@ main {
   letter-spacing: 0.05em;
 }
 
+/* Motor control card */
+.control-card {
+  max-width: 380px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.control-row label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-width: 48px;
+}
+
+.btn-dir {
+  min-width: 70px;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--cyan);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-dir:hover {
+  background: var(--border);
+}
+
+.btn-motor-on {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-motor-off {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-motor-on:hover, .btn-motor-off:hover {
+  opacity: 0.9;
+}
+
+.speed-slider {
+  flex: 1;
+  accent-color: var(--cyan);
+  height: 6px;
+  cursor: pointer;
+}
+
+.speed-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: right;
+}
+
 /* Info card */
 .info-card {
   max-width: 380px;
