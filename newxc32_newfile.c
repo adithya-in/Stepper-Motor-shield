@@ -182,6 +182,12 @@ int main(void) {
     ANSELA = 0; TRISACLR = (1 << 10); LED_PIN = 0;
     uart_init(); qei_init(); motor_init();
 
+    // Auto-start motor at 2000 steps/s CW
+    speed = 2000;
+    dir = DIR_CW;
+    motor_on = 1;
+    motor_set_speed(speed);
+
     uart_puts("\r\n===== SPEED CONTROL =====\r\n");
     uart_puts("ON OFF CW CCW SPEED <steps/s>\r\n");
 
