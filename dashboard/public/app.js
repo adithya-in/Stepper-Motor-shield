@@ -1,18 +1,12 @@
-const POS_RANGE = 10000;
+const MAX_RPM = 3000;
+const MAX_SPEED_STEPS = 10000;
 
 const els = {
-  posActual: document.getElementById('pos-actual'),
-  posTarget: document.getElementById('pos-target'),
-  posBarActual: document.getElementById('pos-bar-actual'),
-  posBarTarget: document.getElementById('pos-bar-target'),
-  errorValue: document.getElementById('error-value'),
-  errorBarNeg: document.getElementById('error-bar-neg'),
-  errorBarPos: document.getElementById('error-bar-pos'),
-  velValue: document.getElementById('vel-value'),
-  ledHomed: document.getElementById('led-homed'),
-  ledMoving: document.getElementById('led-moving'),
-  ledAtTarget: document.getElementById('led-at-target'),
-  ledFault: document.getElementById('led-fault'),
+  rpmValue: document.getElementById('rpm-value'),
+  rpmBar: document.getElementById('rpm-bar'),
+  directionIndicator: document.getElementById('direction-indicator'),
+  directionIcon: document.getElementById('direction-icon'),
+  directionLabel: document.getElementById('direction-label'),
   statusBadge: document.getElementById('status-badge'),
   connStatus: document.getElementById('conn-status'),
   portInfo: document.getElementById('port-info'),
@@ -25,64 +19,48 @@ const els = {
   btnPorts: document.getElementById('btn-ports'),
   modalError: document.getElementById('modal-error'),
   baudInput: document.getElementById('baud-input'),
-  targetInput: document.getElementById('target-input'),
-  btnGo: document.getElementById('btn-go'),
-  btnStop: document.getElementById('btn-stop'),
-  btnHome: document.getElementById('btn-home'),
-  btnClear: document.getElementById('btn-clear'),
-  kpSlider: document.getElementById('kp-slider'),
-  kiSlider: document.getElementById('ki-slider'),
-  maxvSlider: document.getElementById('maxv-slider'),
-  tolSlider: document.getElementById('tol-slider'),
-  ftSlider: document.getElementById('ft-slider'),
-  kpLabel: document.getElementById('kp-label'),
-  kiLabel: document.getElementById('ki-label'),
-  maxvLabel: document.getElementById('maxv-label'),
-  tolLabel: document.getElementById('tol-label'),
-  ftLabel: document.getElementById('ft-label'),
+  btnDir: document.getElementById('btn-dir'),
+  btnMotor: document.getElementById('btn-motor'),
+  speedSlider: document.getElementById('speed-slider'),
+  speedLabel: document.getElementById('speed-label'),
+  speedStepsLabel: document.getElementById('speed-steps-label'),
+  maxSpeedLabel: document.getElementById('max-speed-label'),
+};
+
+let motorDir = 'CW';
+let motorOn = false;
+
+const DIR_MAP = {
+  CW: { icon: '\u25B6', label: 'CW' },
+  CCW: { icon: '\u25C0', label: 'CCW' },
+  STOPPED: { icon: '\u23F9', label: 'STOPPED' },
 };
 
 let selectedPort = null;
 let connected = false;
 
-function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-function updatePosition(actual, target) {
-  els.posActual.textContent = actual.toLocaleString();
-  els.posTarget.textContent = target.toLocaleString();
-  const aPct = clamp(((actual / POS_RANGE) + 1) * 50, 0, 100);
-  const tPct = clamp(((target / POS_RANGE) + 1) * 50, 0, 100);
-  els.posBarActual.style.width = aPct + '%';
-  els.posBarTarget.style.width = tPct + '%';
+function updateRPM(rpm) {
+  const value = Math.max(0, Math.min(MAX_RPM, Math.round(rpm)));
+  const pct = Math.min(100, (value / MAX_RPM) * 100);
+  els.rpmValue.textContent = value;
+  els.rpmBar.style.width = pct + '%';
+  const hue = 120 - (pct / 100) * 120;
+  els.rpmValue.style.color = `hsl(${hue}, 80%, 55%)`;
 }
 
-function updateError(error) {
-  els.errorValue.textContent = error.toLocaleString();
-  els.errorValue.className = 'error-value';
-  if (Math.abs(error) < 5) els.errorValue.classList.add('zero');
-  else if (error > 0) els.errorValue.classList.add('positive');
-  else els.errorValue.classList.add('negative');
-
-  const ePct = clamp(Math.abs(error) / 500 * 50, 0, 50);
-  if (error >= 0) { els.errorBarPos.style.width = ePct + '%'; els.errorBarNeg.style.width = '0%'; }
-  else { els.errorBarNeg.style.width = ePct + '%'; els.errorBarPos.style.width = '0%'; }
-}
-
-function updateVelocity(vel) { els.velValue.textContent = vel.toLocaleString(); }
-
-function updateLED(el, state, colorOn) {
-  el.style.color = state ? colorOn : 'var(--border)';
-  el.style.textShadow = state ? `0 0 8px ${colorOn}` : 'none';
-}
-
-function updateStatus(data) {
-  updateLED(els.ledHomed, data.homed, 'var(--cyan)');
-  updateLED(els.ledMoving, data.moving, 'var(--green)');
-  updateLED(els.ledAtTarget, !data.moving && data.homed, 'var(--green)');
-  updateLED(els.ledFault, data.fault, 'var(--red)');
-  if (data.position !== undefined && data.target !== undefined) updatePosition(data.position, data.target);
-  if (data.error !== undefined) updateError(data.error);
-  if (data.velocity !== undefined) updateVelocity(data.velocity);
+function updateDirection(dir) {
+  const upper = (dir || 'STOPPED').toUpperCase();
+  const m = DIR_MAP[upper] || { icon: '\u2753', label: upper };
+  els.directionIcon.textContent = m.icon;
+  els.directionLabel.textContent = m.label;
+  els.directionIndicator.className = 'direction-indicator';
+  if (upper === 'CW' || upper === 'FORWARD' || upper === 'FWD') {
+    els.directionIndicator.classList.add('forward');
+  } else if (upper === 'CCW' || upper === 'REVERSE' || upper === 'REV') {
+    els.directionIndicator.classList.add('reverse');
+  } else {
+    els.directionIndicator.classList.add('stopped');
+  }
 }
 
 function updateConnection(data) {
@@ -104,8 +82,8 @@ function updateConnection(data) {
 
 function updateTimestamp() {
   const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  els.timestamp.textContent = `Last update: ${now.getHours()}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const pad = n => String(n).padStart(2, '0');
+  els.timestamp.textContent = `Update: ${now.getHours()}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
 // ── Port picker ──
@@ -162,8 +140,19 @@ const ws = new WebSocket(`${protocol}//${location.host}`);
 ws.onmessage = (event) => {
   try {
     const data = JSON.parse(event.data);
+    if (data.rpm !== undefined) updateRPM(data.rpm);
+    if (data.direction !== undefined) updateDirection(data.direction);
+    if (data.on !== undefined) {
+      motorOn = data.on;
+      if (motorOn) {
+        els.btnMotor.textContent = 'MOTOR ON';
+        els.btnMotor.className = 'btn btn-motor-on';
+      } else {
+        els.btnMotor.textContent = 'MOTOR OFF';
+        els.btnMotor.className = 'btn btn-motor-off';
+      }
+    }
     if (data.connected !== undefined) updateConnection(data);
-    updateStatus(data);
     updateTimestamp();
   } catch (e) {}
 };
@@ -172,36 +161,41 @@ ws.onclose = () => updateConnection({ connected: false, port: null });
 
 function sendCmd(cmd) { ws.send(JSON.stringify({ command: cmd })); }
 
-// ── Control handlers ──
-function goTarget() {
-  const val = parseInt(els.targetInput.value, 10);
-  if (!isNaN(val)) sendCmd('T=' + val);
+function toggleDir() {
+  motorDir = (motorDir === 'CW') ? 'CCW' : 'CW';
+  els.btnDir.textContent = motorDir;
+  sendCmd(motorDir);
 }
 
-function stopMotor() { sendCmd('STOP'); els.targetInput.value = '0'; }
-function homeMotor() { sendCmd('HOME'); els.targetInput.value = '0'; }
-function clearFault() { sendCmd('CLEAR'); }
-
-// ── Tuning handlers ──
-function sendTune(cmd, slider, label) {
-  const val = parseInt(slider.value, 10);
-  label.textContent = val;
-  sendCmd(cmd + val);
+function toggleMotor() {
+  motorOn = !motorOn;
+  if (motorOn) {
+    els.btnMotor.textContent = 'MOTOR ON';
+    els.btnMotor.className = 'btn btn-motor-on';
+    sendCmd('ON');
+    const pct = parseInt(els.speedSlider.value, 10) || 0;
+    const steps = Math.round((pct / 100) * MAX_SPEED_STEPS);
+    sendCmd('SPEED ' + steps);
+  } else {
+    els.btnMotor.textContent = 'MOTOR OFF';
+    els.btnMotor.className = 'btn btn-motor-off';
+    sendCmd('OFF');
+  }
 }
 
-// ── Events ──
-els.btnGo.addEventListener('click', goTarget);
-els.targetInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') goTarget(); });
-els.btnStop.addEventListener('click', stopMotor);
-els.btnHome.addEventListener('click', homeMotor);
-els.btnClear.addEventListener('click', clearFault);
+function setSpeed() {
+  const pct = parseInt(els.speedSlider.value, 10);
+  els.speedLabel.textContent = pct + '%';
+  const steps = Math.round((pct / 100) * MAX_SPEED_STEPS);
+  els.speedStepsLabel.textContent = steps + ' steps/s';
+  if (motorOn) sendCmd('SPEED ' + steps);
+}
 
-els.kpSlider.addEventListener('input', () => sendTune('KP=', els.kpSlider, els.kpLabel));
-els.kiSlider.addEventListener('input', () => sendTune('KI=', els.kiSlider, els.kiLabel));
-els.maxvSlider.addEventListener('input', () => sendTune('MAXV=', els.maxvSlider, els.maxvLabel));
-els.tolSlider.addEventListener('input', () => sendTune('TOL=', els.tolSlider, els.tolLabel));
-els.ftSlider.addEventListener('input', () => sendTune('FT=', els.ftSlider, els.ftLabel));
+els.maxSpeedLabel.textContent = MAX_SPEED_STEPS;
 
+els.btnDir.addEventListener('click', toggleDir);
+els.btnMotor.addEventListener('click', toggleMotor);
+els.speedSlider.addEventListener('input', setSpeed);
 els.btnPorts.addEventListener('click', showModal);
 els.btnRefresh.addEventListener('click', fetchPorts);
 els.btnConnect.addEventListener('click', connectToPort);

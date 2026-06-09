@@ -15,11 +15,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 let serial = null;
-let latestData = {
-  position: 0, target: 0, error: 0, velocity: 0,
-  fault: false, homed: false, moving: false,
-  connected: false, port: null, baud: DEFAULT_BAUD
-};
+let latestData = { rpm: 0, direction: 'STOPPED', on: false, connected: false, port: null, baud: DEFAULT_BAUD };
 
 function broadcast(data) {
   const msg = JSON.stringify(data);
@@ -58,7 +54,7 @@ app.post('/api/connect', (req, res) => {
     const lines = buffer.split('\n');
     buffer = lines.pop();
     for (const line of lines) {
-      const parsed = parseStatusLine(line.trim());
+      const parsed = parseLine(line.trim());
       if (parsed) {
         Object.assign(latestData, parsed);
         latestData.connected = true;
@@ -74,10 +70,7 @@ app.post('/api/connect', (req, res) => {
   });
 
   serial.on('close', () => disconnectSerial());
-
-  setTimeout(() => {
-    if (!res.headersSent) res.status(500).json({ error: 'Connection timed out' });
-  }, 5000);
+  setTimeout(() => { if (!res.headersSent) res.status(500).json({ error: 'Connection timed out' }); }, 5000);
 });
 
 app.post('/api/disconnect', (_req, res) => { disconnectSerial(); res.json({ ok: true }); });
@@ -87,25 +80,14 @@ function disconnectSerial() {
   latestData.connected = false; broadcast(latestData);
 }
 
-function parseStatusLine(line) {
-  if (!line || line.startsWith('=') || line.startsWith('OK') || line.startsWith('ERR') || line.startsWith('T=')) return null;
-  const fields = ['P', 'E', 'V', 'T', 'F', 'H', 'M'];
+function parseLine(line) {
+  if (!line || line.startsWith('=') || line.startsWith('OK') || line.startsWith('ERR')) return null;
   const result = {};
-  for (const f of fields) {
-    const re = new RegExp(`${f}:(-?\\d+)`);
-    const m = re.exec(line);
-    if (m) {
-      const val = parseInt(m[1], 10);
-      switch (f) {
-        case 'P': result.position = val; break;
-        case 'E': result.error = val; break;
-        case 'V': result.velocity = val; break;
-        case 'T': result.target = val; break;
-        case 'F': result.fault = val !== 0; break;
-        case 'H': result.homed = val !== 0; break;
-        case 'M': result.moving = val !== 0; break;
-      }
-    }
+  const m = /RPM:(-?\d+).*DIR:(\w+).*ON:(\d+)/.exec(line);
+  if (m) {
+    result.rpm = parseInt(m[1], 10);
+    result.direction = m[2].toUpperCase();
+    result.on = m[3] === '1';
   }
   return Object.keys(result).length ? result : null;
 }
