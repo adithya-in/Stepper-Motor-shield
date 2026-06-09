@@ -95,6 +95,51 @@ AS5047U magnetic encoder in ABI mode connected to QEI1:
 
 ---
 
+## Phase 3: Closed-Loop Position Control
+
+### Architecture
+
+The firmware now runs a **1 kHz position control loop** (Timer3 ISR) that:
+
+1. Reads actual position from QEI encoder (AS5047U, 16384 counts/rev)
+2. Computes following error: `error = target_position - actual_position`
+3. Checks fault threshold: if `|error| > FT`, triggers emergency stop
+4. Runs PI controller: `velocity = Kp × error + Ki × ∫error`
+5. Clamps velocity to `MAXV` (coil current limit enforcement)
+6. Sets direction and OC1 step rate via hardware PWM
+7. When within tolerance, stops OC1 and disables driver (position hold)
+
+### UART Protocol
+
+The firmware communicates with the dashboard at 19200 baud:
+
+**Status telemetry** (10 Hz):  
+`P:<pos>,E:<error>,V:<vel>,T:<target>,F:<fault>,H:<homed>,M:<moving>`
+
+**Commands:**  
+- `T=<pos>` — Set target position (triggers point-to-point move)
+- `HOME` — Set current position as zero reference
+- `STOP` — Emergency stop (motor off, target = current position)
+- `CLEAR` — Clear fault and reinitialize motor pins
+- `KP=<val>` — Set proportional gain (default 50)
+- `KI=<val>` — Set integral gain (default 5)
+- `MAXV=<val>` — Set max velocity in steps/s (default 2000)
+- `TOL=<val>` — Set position tolerance in counts (default 5)
+- `FT=<val>` — Set fault threshold in counts (default 500)
+
+### Dashboard
+
+Web-based control running on Node.js/Express with WebSocket:
+- Real-time actual/target position bars
+- Following error gauge (positive/negative/zero)
+- Status LEDs: homed, moving, at-target, fault
+- Velocity readout
+- Target position input + GO button
+- STOP, HOME, Clear Fault buttons
+- Live tuning sliders for Kp, Ki, MaxV, Tolerance, Fault Threshold
+
+---
+
 ## Key Lessons
 
 | Issue | Lesson |

@@ -33,3 +33,4 @@ The firmware runs CW 5 s → CCW 5 s → repeat, reporting RPM over UART at 1920
 
 - **v1.0.0** — Encoder-only firmware (AS5047U → QEI → UART)
 - **v2.0.0** — Integrated stepper control (TB6600) + encoder feedback + full test documentation
+- **v3.0.0** — Closed-loop position control with PI controller, fault detection, and position-control web dashboard

@@ -3,50 +3,124 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PIC32MK Motor Dashboard</title>
+  <title>Closed-Loop Stepper Control</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
-    <h1>PIC32MK MCJ Curiosity Pro</h1>
+    <h1>Closed-Loop Stepper</h1>
     <span id="status-badge" class="badge disconnected">Disconnected</span>
     <button id="btn-ports" class="btn-link">Change Port</button>
   </header>
 
   <main>
-    <section class="card rpm-card">
-      <h2>Motor Speed</h2>
-      <div class="rpm-display">
-        <span id="rpm-value">0</span>
-        <span class="rpm-unit">RPM</span>
+    <!-- Position Card -->
+    <section class="card pos-card">
+      <h2>Position</h2>
+      <div class="pos-grid">
+        <div class="pos-item">
+          <span class="pos-label">Actual</span>
+          <span id="pos-actual" class="pos-value">0</span>
+        </div>
+        <div class="pos-item">
+          <span class="pos-label">Target</span>
+          <span id="pos-target" class="pos-value">0</span>
+        </div>
       </div>
-      <div class="rpm-bar-track">
-        <div id="rpm-bar" class="rpm-bar-fill" style="width: 0%"></div>
+      <div class="pos-bar-track">
+        <div id="pos-bar-actual" class="pos-bar-fill actual" style="width: 50%"></div>
+        <div id="pos-bar-target" class="pos-bar-fill target" style="width: 50%"></div>
       </div>
     </section>
 
-    <section class="card direction-card">
-      <h2>Motor Direction</h2>
-      <div id="direction-indicator" class="direction-indicator stopped">
-        <span id="direction-icon" class="direction-icon">&#9632;</span>
-        <span id="direction-label">STOPPED</span>
+    <!-- Following Error Card -->
+    <section class="card error-card">
+      <h2>Following Error</h2>
+      <div class="error-display">
+        <span id="error-value" class="error-value zero">0</span>
+        <span class="error-unit">counts</span>
+      </div>
+      <div class="error-bar-track">
+        <div id="error-bar-neg" class="error-bar neg" style="width: 0%"></div>
+        <div id="error-bar-pos" class="error-bar pos" style="width: 0%"></div>
       </div>
     </section>
 
-    <section class="card control-card">
-      <h2>Motor Control</h2>
+    <!-- Status Card -->
+    <section class="card status-card">
+      <h2>Status</h2>
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="status-led" id="led-homed">&#9679;</span>
+          <span>Homed</span>
+        </div>
+        <div class="status-item">
+          <span class="status-led" id="led-moving">&#9679;</span>
+          <span>Moving</span>
+        </div>
+        <div class="status-item">
+          <span class="status-led" id="led-at-target">&#9679;</span>
+          <span>At Target</span>
+        </div>
+        <div class="status-item">
+          <span class="status-led" id="led-fault">&#9679;</span>
+          <span>Fault</span>
+        </div>
+      </div>
+      <div class="vel-display">
+        <span class="pos-label">Velocity</span>
+        <span id="vel-value" class="vel-value">0</span>
+        <span class="vel-unit">steps/s</span>
+      </div>
+    </section>
+
+    <!-- Controls Card -->
+    <section class="card controls-card">
+      <h2>Control</h2>
       <div class="control-row">
-        <button id="btn-dir" class="btn btn-dir">CW</button>
-        <button id="btn-motor" class="btn btn-motor-off">MOTOR OFF</button>
+        <label for="target-input">Target</label>
+        <input type="number" id="target-input" value="0" class="num-input">
+        <button id="btn-go" class="btn btn-primary">GO</button>
+        <button id="btn-stop" class="btn btn-danger">STOP</button>
       </div>
       <div class="control-row">
-        <label for="speed-slider">Speed</label>
-        <input type="range" id="speed-slider" min="0" max="100" value="0" class="speed-slider">
-        <span id="speed-label" class="speed-label">0%</span>
+        <button id="btn-home" class="btn">HOME (Zero)</button>
+        <button id="btn-clear" class="btn btn-warn">Clear Fault</button>
       </div>
     </section>
 
-    <section class="card info-card">
+    <!-- Tuning Card -->
+    <section class="card tuning-card">
+      <h2>Tuning</h2>
+      <div class="tune-row">
+        <label>Kp</label>
+        <input type="range" id="kp-slider" min="0" max="500" value="50" class="tune-slider">
+        <span id="kp-label" class="tune-label">50</span>
+      </div>
+      <div class="tune-row">
+        <label>Ki</label>
+        <input type="range" id="ki-slider" min="0" max="200" value="5" class="tune-slider">
+        <span id="ki-label" class="tune-label">5</span>
+      </div>
+      <div class="tune-row">
+        <label>Max Vel</label>
+        <input type="range" id="maxv-slider" min="100" max="5000" value="2000" step="100" class="tune-slider">
+        <span id="maxv-label" class="tune-label">2000</span>
+      </div>
+      <div class="tune-row">
+        <label>Tolerance</label>
+        <input type="range" id="tol-slider" min="1" max="100" value="5" class="tune-slider">
+        <span id="tol-label" class="tune-label">5</span>
+      </div>
+      <div class="tune-row">
+        <label>Fault Threshold</label>
+        <input type="range" id="ft-slider" min="50" max="5000" value="500" step="50" class="tune-slider">
+        <span id="ft-label" class="tune-label">500</span>
+      </div>
+    </section>
+
+    <!-- Connection Card -->
+    <section class="card conn-card">
       <h2>Connection</h2>
       <table>
         <tr><td>Port</td><td id="port-info">—</td></tr>
@@ -56,19 +130,14 @@
     </section>
   </main>
 
-  <footer>
-    <span id="timestamp"></span>
-  </footer>
+  <footer><span id="timestamp"></span></footer>
 
-  <!-- Port selection modal -->
   <div id="modal-overlay" class="modal-overlay">
     <div class="modal">
       <h2>Select Serial Port</h2>
-      <div id="port-list" class="port-list">
-        <p class="muted">Scanning for ports...</p>
-      </div>
+      <div id="port-list" class="port-list"><p class="muted">Scanning...</p></div>
       <div class="port-baud">
-        <label for="baud-input">Baud rate:</label>
+        <label for="baud-input">Baud:</label>
         <input type="number" id="baud-input" value="19200" min="9600" max="921600">
       </div>
       <div class="modal-actions">

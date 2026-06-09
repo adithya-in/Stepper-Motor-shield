@@ -1,12 +1,18 @@
-const MAX_RPM = 3000;
-const MAX_SPEED_STEP = 20000;
+const POS_RANGE = 10000;
 
 const els = {
-  rpmValue: document.getElementById('rpm-value'),
-  rpmBar: document.getElementById('rpm-bar'),
-  directionIndicator: document.getElementById('direction-indicator'),
-  directionIcon: document.getElementById('direction-icon'),
-  directionLabel: document.getElementById('direction-label'),
+  posActual: document.getElementById('pos-actual'),
+  posTarget: document.getElementById('pos-target'),
+  posBarActual: document.getElementById('pos-bar-actual'),
+  posBarTarget: document.getElementById('pos-bar-target'),
+  errorValue: document.getElementById('error-value'),
+  errorBarNeg: document.getElementById('error-bar-neg'),
+  errorBarPos: document.getElementById('error-bar-pos'),
+  velValue: document.getElementById('vel-value'),
+  ledHomed: document.getElementById('led-homed'),
+  ledMoving: document.getElementById('led-moving'),
+  ledAtTarget: document.getElementById('led-at-target'),
+  ledFault: document.getElementById('led-fault'),
   statusBadge: document.getElementById('status-badge'),
   connStatus: document.getElementById('conn-status'),
   portInfo: document.getElementById('port-info'),
@@ -19,53 +25,64 @@ const els = {
   btnPorts: document.getElementById('btn-ports'),
   modalError: document.getElementById('modal-error'),
   baudInput: document.getElementById('baud-input'),
-  btnDir: document.getElementById('btn-dir'),
-  btnMotor: document.getElementById('btn-motor'),
-  speedSlider: document.getElementById('speed-slider'),
-  speedLabel: document.getElementById('speed-label'),
-};
-
-let motorDir = 'CW';
-let motorOn = false;
-
-const DIRECTION_MAP = {
-  FORWARD:  { icon: '\u25B6', label: 'FORWARD' },
-  FWD:      { icon: '\u25B6', label: 'FORWARD' },
-  REVERSE:  { icon: '\u25C0', label: 'REVERSE' },
-  REV:      { icon: '\u25C0', label: 'REVERSE' },
-  BACKWARD: { icon: '\u25C0', label: 'REVERSE' },
-  CW:       { icon: '\u25B6', label: 'FORWARD' },
-  CCW:      { icon: '\u25C0', label: 'REVERSE' },
-  STOPPED:  { icon: '\u23F9', label: 'STOPPED' },
-  STOP:     { icon: '\u23F9', label: 'STOPPED' },
-  IDLE:     { icon: '\u23F9', label: 'STOPPED' },
+  targetInput: document.getElementById('target-input'),
+  btnGo: document.getElementById('btn-go'),
+  btnStop: document.getElementById('btn-stop'),
+  btnHome: document.getElementById('btn-home'),
+  btnClear: document.getElementById('btn-clear'),
+  kpSlider: document.getElementById('kp-slider'),
+  kiSlider: document.getElementById('ki-slider'),
+  maxvSlider: document.getElementById('maxv-slider'),
+  tolSlider: document.getElementById('tol-slider'),
+  ftSlider: document.getElementById('ft-slider'),
+  kpLabel: document.getElementById('kp-label'),
+  kiLabel: document.getElementById('ki-label'),
+  maxvLabel: document.getElementById('maxv-label'),
+  tolLabel: document.getElementById('tol-label'),
+  ftLabel: document.getElementById('ft-label'),
 };
 
 let selectedPort = null;
 let connected = false;
 
-function updateRPM(rpm) {
-  const value = Math.max(0, Math.min(MAX_RPM, Math.round(rpm)));
-  const pct = Math.min(100, (value / MAX_RPM) * 100);
-  els.rpmValue.textContent = value;
-  els.rpmBar.style.width = pct + '%';
-  const hue = 120 - (pct / 100) * 120;
-  els.rpmValue.style.color = `hsl(${hue}, 80%, 55%)`;
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function updatePosition(actual, target) {
+  els.posActual.textContent = actual.toLocaleString();
+  els.posTarget.textContent = target.toLocaleString();
+  const aPct = clamp(((actual / POS_RANGE) + 1) * 50, 0, 100);
+  const tPct = clamp(((target / POS_RANGE) + 1) * 50, 0, 100);
+  els.posBarActual.style.width = aPct + '%';
+  els.posBarTarget.style.width = tPct + '%';
 }
 
-function updateDirection(dir) {
-  const upper = (dir || 'STOPPED').toUpperCase();
-  const mapping = DIRECTION_MAP[upper] || { icon: '\u2753', label: upper };
-  els.directionIcon.textContent = mapping.icon;
-  els.directionLabel.textContent = mapping.label;
-  els.directionIndicator.className = 'direction-indicator';
-  if (upper === 'FORWARD' || upper === 'CW') {
-    els.directionIndicator.classList.add('forward');
-  } else if (['REVERSE', 'BACKWARD', 'CCW'].includes(upper)) {
-    els.directionIndicator.classList.add('reverse');
-  } else {
-    els.directionIndicator.classList.add('stopped');
-  }
+function updateError(error) {
+  els.errorValue.textContent = error.toLocaleString();
+  els.errorValue.className = 'error-value';
+  if (Math.abs(error) < 5) els.errorValue.classList.add('zero');
+  else if (error > 0) els.errorValue.classList.add('positive');
+  else els.errorValue.classList.add('negative');
+
+  const ePct = clamp(Math.abs(error) / 500 * 50, 0, 50);
+  if (error >= 0) { els.errorBarPos.style.width = ePct + '%'; els.errorBarNeg.style.width = '0%'; }
+  else { els.errorBarNeg.style.width = ePct + '%'; els.errorBarPos.style.width = '0%'; }
+}
+
+function updateVelocity(vel) { els.velValue.textContent = vel.toLocaleString(); }
+
+function updateLED(el, state, colorOn) {
+  el.style.color = state ? colorOn : 'var(--border)';
+  el.style.textShadow = state ? `0 0 8px ${colorOn}` : 'none';
+}
+
+function updateStatus(data) {
+  updateLED(els.ledHomed, data.homed, 'var(--cyan)');
+  updateLED(els.ledMoving, data.moving, 'var(--green)');
+  updateLED(els.ledAtTarget, !data.moving && data.homed, 'var(--green)');
+  updateLED(els.ledFault, data.fault, 'var(--red)');
+  if (data.position !== undefined && data.target !== undefined) updatePosition(data.position, data.target);
+  if (data.error !== undefined) updateError(data.error);
+  if (data.velocity !== undefined) updateVelocity(data.velocity);
 }
 
 function updateConnection(data) {
@@ -88,145 +105,106 @@ function updateConnection(data) {
 function updateTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  els.timestamp.textContent =
-    `Last update: ${now.getHours()}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  els.timestamp.textContent = `Last update: ${now.getHours()}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
-// --- Port picker ---
+// ── Port picker ──
 async function fetchPorts() {
-  els.portList.innerHTML = '<p class="muted">Scanning for ports...</p>';
+  els.portList.innerHTML = '<p class="muted">Scanning...</p>';
   els.btnConnect.disabled = true;
   selectedPort = null;
   try {
     const res = await fetch('/api/ports');
     const ports = await res.json();
     if (ports.length === 0) {
-      els.portList.innerHTML = '<p class="muted">No serial devices found. Plug in your board and click Refresh.</p>';
+      els.portList.innerHTML = '<p class="muted">No serial devices found.</p>';
       return;
     }
     els.portList.innerHTML = '';
-    ports.forEach((p) => {
+    ports.forEach(p => {
       const div = document.createElement('div');
       div.className = 'port-item';
-      div.innerHTML = `
-        <input type="radio" name="port" value="${p.path}">
-        <div>
-          <div class="port-label">${p.path}</div>
-          <div class="port-desc">${p.manufacturer || p.productId || 'Unknown device'}</div>
-        </div>
-      `;
+      div.innerHTML = `<input type="radio" name="port" value="${p.path}"><div><div class="port-label">${p.path}</div><div class="port-desc">${p.manufacturer || p.productId || 'Unknown'}</div></div>`;
       div.querySelector('input').addEventListener('change', () => {
-        document.querySelectorAll('.port-item').forEach((el) => el.classList.remove('selected'));
+        document.querySelectorAll('.port-item').forEach(el => el.classList.remove('selected'));
         div.classList.add('selected');
         selectedPort = p.path;
         els.btnConnect.disabled = false;
       });
-      div.addEventListener('click', () => {
-        div.querySelector('input').click();
-      });
+      div.addEventListener('click', () => div.querySelector('input').click());
       els.portList.appendChild(div);
     });
-  } catch (err) {
-    els.portList.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
-  }
+  } catch (err) { els.portList.innerHTML = `<p class="muted">Error: ${err.message}</p>`; }
 }
 
-function showModal() {
-  els.modal.classList.add('active');
-  els.modalError.textContent = '';
-  fetchPorts();
-}
-
-function hideModal() {
-  els.modal.classList.remove('active');
-}
+function showModal() { els.modal.classList.add('active'); els.modalError.textContent = ''; fetchPorts(); }
+function hideModal() { els.modal.classList.remove('active'); }
 
 async function connectToPort() {
   if (!selectedPort) return;
-  els.btnConnect.disabled = true;
-  els.modalError.textContent = '';
+  els.btnConnect.disabled = true; els.modalError.textContent = '';
   const baud = parseInt(document.getElementById('baud-input').value, 10) || 19200;
   try {
     const res = await fetch('/api/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: selectedPort, baud }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Connection failed');
     hideModal();
-  } catch (err) {
-    els.modalError.textContent = err.message;
-    els.btnConnect.disabled = false;
-  }
+  } catch (err) { els.modalError.textContent = err.message; els.btnConnect.disabled = false; }
 }
 
-// --- WebSocket ---
+// ── WebSocket ──
 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const ws = new WebSocket(`${protocol}//${location.host}`);
 
 ws.onmessage = (event) => {
   try {
     const data = JSON.parse(event.data);
-    if (data.rpm !== undefined) updateRPM(data.rpm);
-    if (data.direction !== undefined) updateDirection(data.direction);
     if (data.connected !== undefined) updateConnection(data);
+    updateStatus(data);
     updateTimestamp();
   } catch (e) {}
 };
 
-ws.onclose = () => {
-  updateConnection({ connected: false, port: null });
-};
+ws.onclose = () => updateConnection({ connected: false, port: null });
 
-function sendCmd(cmd) {
-  const msg = JSON.stringify({ command: cmd });
-  ws.send(msg);
+function sendCmd(cmd) { ws.send(JSON.stringify({ command: cmd })); }
+
+// ── Control handlers ──
+function goTarget() {
+  const val = parseInt(els.targetInput.value, 10);
+  if (!isNaN(val)) sendCmd('T=' + val);
 }
 
-function toggleDir() {
-  motorDir = (motorDir === 'CW') ? 'CCW' : 'CW';
-  els.btnDir.textContent = motorDir;
-  sendCmd(motorDir);
+function stopMotor() { sendCmd('STOP'); els.targetInput.value = '0'; }
+function homeMotor() { sendCmd('HOME'); els.targetInput.value = '0'; }
+function clearFault() { sendCmd('CLEAR'); }
+
+// ── Tuning handlers ──
+function sendTune(cmd, slider, label) {
+  const val = parseInt(slider.value, 10);
+  label.textContent = val;
+  sendCmd(cmd + val);
 }
 
-function toggleMotor() {
-  motorOn = !motorOn;
-  if (motorOn) {
-    els.btnMotor.textContent = 'MOTOR ON';
-    els.btnMotor.className = 'btn btn-motor-on';
-    sendCmd('ON');
-  } else {
-    els.btnMotor.textContent = 'MOTOR OFF';
-    els.btnMotor.className = 'btn btn-motor-off';
-    els.speedSlider.value = 0;
-    els.speedLabel.textContent = '0%';
-    sendCmd('OFF');
-  }
-}
+// ── Events ──
+els.btnGo.addEventListener('click', goTarget);
+els.targetInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') goTarget(); });
+els.btnStop.addEventListener('click', stopMotor);
+els.btnHome.addEventListener('click', homeMotor);
+els.btnClear.addEventListener('click', clearFault);
 
-function setSpeed() {
-  const pct = parseInt(els.speedSlider.value, 10);
-  els.speedLabel.textContent = pct + '%';
-  const steps = Math.round((pct / 100) * MAX_SPEED_STEP);
-  sendCmd('SPEED ' + steps);
-}
-
-// --- Events ---
-els.btnDir.addEventListener('click', toggleDir);
-els.btnMotor.addEventListener('click', toggleMotor);
-els.speedSlider.addEventListener('input', setSpeed);
+els.kpSlider.addEventListener('input', () => sendTune('KP=', els.kpSlider, els.kpLabel));
+els.kiSlider.addEventListener('input', () => sendTune('KI=', els.kiSlider, els.kiLabel));
+els.maxvSlider.addEventListener('input', () => sendTune('MAXV=', els.maxvSlider, els.maxvLabel));
+els.tolSlider.addEventListener('input', () => sendTune('TOL=', els.tolSlider, els.tolLabel));
+els.ftSlider.addEventListener('input', () => sendTune('FT=', els.ftSlider, els.ftLabel));
 
 els.btnPorts.addEventListener('click', showModal);
 els.btnRefresh.addEventListener('click', fetchPorts);
 els.btnConnect.addEventListener('click', connectToPort);
+els.modal.addEventListener('click', (e) => { if (e.target === els.modal) hideModal(); });
 
-// Close modal on overlay click
-els.modal.addEventListener('click', (e) => {
-  if (e.target === els.modal) hideModal();
-});
-
-// Show modal on load if not connected
-setTimeout(() => {
-  if (!connected) showModal();
-}, 500);
+setTimeout(() => { if (!connected) showModal(); }, 500);
