@@ -43,6 +43,7 @@ static void uart_init(void) {
     RPE0R = 1; U1RXR = 1;
     syskey_unlock(); CFGCONbits.IOLOCK = 1;
     ANSELECLR = (1 << 0); TRISECLR = (1 << 0);
+    ANSELGCLR = (1 << 8); TRISGSET = (1 << 8);
     U1MODE = 0;
     U1BRG = (PB_CLOCK / (16 * 19200)) - 1;
     U1MODEbits.UARTEN = 1; U1STAbits.UTXEN = 1;
