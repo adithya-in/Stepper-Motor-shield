@@ -23,6 +23,7 @@
 static int motor_on = 0;
 static int speed = 0;
 static int dir = DIR_CW;
+static int32_t encoder_pos = 0;
 
 static inline uint32_t core_ticks(void) { return _CP0_GET_COUNT(); }
 
@@ -83,16 +84,17 @@ static void qei_init(void) {
 }
 
 static void encoder_poll(void) {
-    static uint32_t last_pos = 0, last_tick = 0, inited = 0;
-    if (!inited) { last_pos = POS1CNT; last_tick = core_ticks(); inited = 1; return; }
+    static uint32_t last_qei = 0, last_tick = 0, inited = 0;
+    if (!inited) { last_qei = POS1CNT; last_tick = core_ticks(); inited = 1; return; }
     uint32_t pos = POS1CNT, tick = core_ticks();
     uint32_t dt = tick - last_tick;
+    encoder_pos = (int32_t)pos;
     if (dt < (1000 * 4000u)) return;
-    int32_t delta = (int32_t)(pos - last_pos);
+    int32_t delta = (int32_t)(pos - last_qei);
     int dt_ms = dt / 4000u;
     encoder_dir = (delta > 0) - (delta < 0);
     encoder_rpm = (dt_ms > 0) ? (int)((int64_t)(delta > 0 ? delta : -delta) * 60000 / (ENCODER_PPR * 4 * dt_ms)) : 0;
-    last_pos = pos; last_tick = tick;
+    last_qei = pos; last_tick = tick;
 }
 
 // ── Motor ──
@@ -174,6 +176,7 @@ static void send_status(void) {
     uart_puts("RPM:"); uart_putint(encoder_rpm);
     uart_puts(",DIR:"); uart_puts(dir == DIR_CW ? "CW" : "CCW");
     uart_puts(",ON:"); uart_puts(motor_on ? "1" : "0");
+    uart_puts(",POS:"); uart_putint(encoder_pos);
     uart_puts("\r\n");
 }
 

@@ -25,6 +25,7 @@ const els = {
   speedLabel: document.getElementById('speed-label'),
   speedStepsLabel: document.getElementById('speed-steps-label'),
   maxSpeedLabel: document.getElementById('max-speed-label'),
+  encPos: document.getElementById('enc-pos'),
 };
 
 let motorDir = 'CW';
@@ -142,6 +143,7 @@ ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (data.rpm !== undefined) updateRPM(data.rpm);
     if (data.direction !== undefined) updateDirection(data.direction);
+    if (data.position !== undefined) els.encPos.textContent = data.position.toLocaleString();
     if (data.on !== undefined) {
       motorOn = data.on;
       if (motorOn) {

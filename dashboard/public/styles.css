@@ -119,6 +119,14 @@ main {
 .speed-hint { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-top: -0.25rem; }
 #speed-steps-label { color: var(--cyan); font-weight: 500; }
 
+/* Encoder */
+.enc-display { display: flex; align-items: baseline; gap: 0.25rem; margin-bottom: 0.75rem; }
+.enc-value { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--blue); line-height: 1; }
+.enc-unit { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.enc-card td { padding: 0.3rem 0; font-size: 0.85rem; }
+.enc-card td:first-child { color: var(--muted); padding-right: 1rem; }
+.enc-card td:last-child { font-weight: 500; font-variant-numeric: tabular-nums; }
+
 /* Info */
 .info-card td { padding: 0.4rem 0; font-size: 0.9rem; }
 .info-card td:first-child { color: var(--muted); padding-right: 1.5rem; }

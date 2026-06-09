@@ -83,11 +83,12 @@ function disconnectSerial() {
 function parseLine(line) {
   if (!line || line.startsWith('=') || line.startsWith('OK') || line.startsWith('ERR')) return null;
   const result = {};
-  const m = /RPM:(-?\d+).*DIR:(\w+).*ON:(\d+)/.exec(line);
+  const m = /RPM:(-?\d+).*DIR:(\w+).*ON:(\d+).*POS:(-?\d+)/.exec(line);
   if (m) {
     result.rpm = parseInt(m[1], 10);
     result.direction = m[2].toUpperCase();
     result.on = m[3] === '1';
+    result.position = parseInt(m[4], 10);
   }
   return Object.keys(result).length ? result : null;
 }
