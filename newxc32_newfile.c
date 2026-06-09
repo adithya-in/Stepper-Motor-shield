@@ -165,9 +165,20 @@ static void parse_command(const char *cmd) {
 static void uart_poll(void) {
     char c = uart_getchar();
     while (c != (char)-1) {
-        if (c == '\r' || c == '\n') {
-            if (rx_idx > 0) { rx_buf[rx_idx] = '\0'; parse_command(rx_buf); rx_idx = 0; }
-        } else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
+        // Single-char commands for instant response
+        if (c == '0') { motor_on = 0; motor_set_speed(0); LED_PIN = 0; uart_puts("OK OFF\r\n"); }
+        else if (c == '1') { motor_on = 1; motor_set_speed(speed); LED_PIN = 1; uart_puts("OK ON\r\n"); }
+        else if (c == '2') { dir = DIR_CW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CW\r\n"); }
+        else if (c == '3') { dir = DIR_CCW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CCW\r\n"); }
+        else {
+            // Show LED blip for any RX activity
+            LED_PIN = 1;
+            // Buffer for string commands
+            if (c == '\r' || c == '\n') {
+                if (rx_idx > 0) { rx_buf[rx_idx] = '\0'; parse_command(rx_buf); rx_idx = 0; }
+                LED_PIN = 0;
+            } else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
+        }
         c = uart_getchar();
     }
 }

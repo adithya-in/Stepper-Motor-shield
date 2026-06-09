@@ -166,7 +166,7 @@ function sendCmd(cmd) { ws.send(JSON.stringify({ command: cmd })); }
 function toggleDir() {
   motorDir = (motorDir === 'CW') ? 'CCW' : 'CW';
   els.btnDir.textContent = motorDir;
-  sendCmd(motorDir);
+  sendCmd(motorDir === 'CW' ? '2' : '3');
 }
 
 function toggleMotor() {
@@ -174,14 +174,14 @@ function toggleMotor() {
   if (motorOn) {
     els.btnMotor.textContent = 'MOTOR ON';
     els.btnMotor.className = 'btn btn-motor-on';
-    sendCmd('ON');
+    sendCmd('1');
     const pct = parseInt(els.speedSlider.value, 10) || 0;
     const steps = Math.round((pct / 100) * MAX_SPEED_STEPS);
     sendCmd('SPEED ' + steps);
   } else {
     els.btnMotor.textContent = 'MOTOR OFF';
     els.btnMotor.className = 'btn btn-motor-off';
-    sendCmd('OFF');
+    sendCmd('0');
   }
 }
 
