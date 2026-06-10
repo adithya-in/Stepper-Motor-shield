@@ -3,69 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Motor Speed Control</title>
+  <title>Position Control</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
-    <h1>Motor Speed Control</h1>
+    <h1>Position Control</h1>
     <span id="status-badge" class="badge disconnected">Disconnected</span>
     <button id="btn-ports" class="btn-link">Change Port</button>
   </header>
 
   <main>
-    <!-- RPM Card -->
-    <section class="card rpm-card">
-      <h2>Motor Speed</h2>
-      <div class="rpm-display">
-        <span id="rpm-value">0</span>
-        <span class="rpm-unit">RPM</span>
+    <!-- Position Card -->
+    <section class="card pos-card">
+      <h2>Position</h2>
+      <div class="pos-row">
+        <div class="pos-display">
+          <span class="pos-label">Target</span>
+          <span id="pos-target" class="pos-value">0</span>
+        </div>
+        <div class="pos-display">
+          <span class="pos-label">Actual</span>
+          <span id="pos-actual" class="pos-value">0</span>
+        </div>
       </div>
-      <div class="rpm-bar-track">
-        <div id="rpm-bar" class="rpm-bar-fill" style="width: 0%"></div>
+      <div class="pos-bar-track">
+        <div id="pos-bar" class="pos-bar-fill" style="width: 50%"></div>
       </div>
-    </section>
-
-    <!-- Direction Card -->
-    <section class="card direction-card">
-      <h2>Direction</h2>
-      <div id="direction-indicator" class="direction-indicator stopped">
-        <span id="direction-icon" class="direction-icon">&#9632;</span>
-        <span id="direction-label">STOPPED</span>
-      </div>
-    </section>
-
-    <!-- Control Card -->
-    <section class="card control-card">
-      <h2>Control</h2>
-      <div class="control-row">
-        <button id="btn-dir" class="btn btn-dir">CW</button>
-        <button id="btn-motor" class="btn btn-motor-off">MOTOR OFF</button>
-      </div>
-      <div class="control-row">
-        <label for="speed-slider">Speed</label>
-        <input type="range" id="speed-slider" min="0" max="100" value="0" class="speed-slider">
-        <span id="speed-label" class="speed-label">0%</span>
-      </div>
-      <div class="speed-hint">
-        <span>0</span>
-        <span id="speed-steps-label">0 steps/s</span>
-        <span id="max-speed-label">10000</span>
+      <div class="pos-row">
+        <input type="number" id="target-input" value="0" class="target-input">
+        <button id="btn-go" class="btn btn-primary">GO</button>
+        <button id="btn-stop" class="btn btn-stop">STOP</button>
+        <button id="btn-home" class="btn">HOME</button>
+        <button id="btn-zero" class="btn">ZERO</button>
       </div>
     </section>
 
-    <!-- Encoder Card -->
-    <section class="card enc-card">
-      <h2>Encoder</h2>
-      <div class="enc-display">
-        <span class="pos-label">Position</span>
-        <span id="enc-pos" class="enc-value">0</span>
-        <span class="enc-unit">counts</span>
-      </div>
+    <!-- Status Card -->
+    <section class="card status-card">
+      <h2>Status</h2>
       <table>
-        <tr><td>PPR</td><td>4096</td></tr>
-        <tr><td>Resolution</td><td>16384 counts/rev</td></tr>
+        <tr><td>Error</td><td id="status-error">0</td></tr>
+        <tr><td>Velocity</td><td id="status-vel">0 steps/s</td></tr>
+        <tr><td>Fault</td><td id="status-fault">No</td></tr>
+        <tr><td>Moving</td><td id="status-moving">No</td></tr>
+        <tr><td>At Target</td><td id="status-atarget">Yes</td></tr>
       </table>
+    </section>
+
+    <!-- Motor Test Card -->
+    <section class="card motor-card">
+      <h2>Motor Test</h2>
+      <div class="motor-row">
+        <button id="btn-on" class="btn btn-on">ON</button>
+        <button id="btn-off" class="btn btn-off">OFF</button>
+      </div>
+      <div class="motor-row">
+        <button id="btn-cw" class="btn">CW</button>
+        <button id="btn-ccw" class="btn">CCW</button>
+      </div>
+      <div class="motor-row">
+        <label>Speed: <span id="speed-label">100</span> steps/s</label>
+        <input type="range" id="speed-slider" min="10" max="10000" value="100" class="speed-slider">
+      </div>
+    </section>
+
+    <!-- PID Tuning Card -->
+    <section class="card pid-card">
+      <h2>PID Tuning</h2>
+      <div class="pid-row">
+        <label>Kp: <span id="kp-label">50</span></label>
+        <input type="range" id="kp-slider" min="0" max="500" value="50" class="pid-slider">
+      </div>
+      <div class="pid-row">
+        <label>Ki: <span id="ki-label">5</span></label>
+        <input type="range" id="ki-slider" min="0" max="100" value="5" class="pid-slider">
+      </div>
+      <div class="pid-row">
+        <label>MaxV: <input type="number" id="maxv-input" value="2000" min="10" max="10000" class="pid-num"></label>
+        <button id="btn-maxv" class="btn btn-small">Set</button>
+      </div>
+      <div class="pid-row">
+        <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"></label>
+        <button id="btn-tol" class="btn btn-small">Set</button>
+      </div>
+      <div class="pid-row">
+        <label>Fault Threshold: <input type="number" id="ft-input" value="500" min="1" max="100000" class="pid-num"></label>
+        <button id="btn-ft" class="btn btn-small">Set</button>
+      </div>
+      <div class="pid-row">
+        <button id="btn-clear" class="btn">CLEAR FAULT</button>
+      </div>
     </section>
 
     <!-- Connection Card -->

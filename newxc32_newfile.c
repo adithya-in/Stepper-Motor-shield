@@ -8,22 +8,40 @@
 #pragma config ICESEL  = ICS_PGx2
 #pragma config JTAGEN  = OFF
 
-#define PB_CLOCK    4000000
-#define DIR_CW      0
-#define DIR_CCW     1
-#define ENA_ON      0
-#define ENA_OFF     1
-#define OC1_FN      5
-#define ENCODER_PPR 4096
+#define PB_CLOCK      4000000
+#define DIR_CW        0
+#define DIR_CCW       1
+#define ENA_ON        0
+#define ENA_OFF       1
+#define OC1_FN        5
+#define ENCODER_PPR   4096
+#define CONTROL_FREQ  1000
+#define INTEGRAL_LIMIT 10000
 
 #define DIR_PIN     LATBbits.LATB14
 #define ENA_PIN     LATBbits.LATB13
 #define LED_PIN     LATAbits.LATA10
 
-static int motor_on = 0;
-static int speed = 0;
-static int dir = DIR_CW;
-static int32_t encoder_pos = 0;
+static volatile int32_t target_pos   = 0;
+static volatile int32_t follow_err   = 0;
+static volatile int32_t current_vel  = 0;
+static volatile uint8_t fault        = 0;
+static volatile uint8_t moving       = 0;
+static volatile uint8_t at_target    = 1;
+static volatile uint8_t open_loop    = 0;
+static volatile uint16_t fault_cnt  = 0;
+
+
+static int32_t Kp          = 50;
+static int32_t Ki          = 5;
+static int32_t max_vel     = 2000;
+static int32_t tolerance   = 5;
+static int32_t fault_thr   = 500;
+static int32_t accel_limit = 500;   // steps/sec²
+
+static int32_t encoder_offset = 0;
+static int32_t integral = 0;
+static int32_t cmd_vel = 0;  // ramped velocity for acceleration limiting
 
 static inline uint32_t core_ticks(void) { return _CP0_GET_COUNT(); }
 
@@ -91,18 +109,8 @@ static void qei_init(void) {
     QEI1CONbits.QEIEN = 1;
 }
 
-static void encoder_poll(void) {
-    static uint32_t last_qei = 0, last_tick = 0, inited = 0;
-    if (!inited) { last_qei = POS1CNT; last_tick = core_ticks(); inited = 1; return; }
-    uint32_t pos = POS1CNT, tick = core_ticks();
-    uint32_t dt = tick - last_tick;
-    encoder_pos = (int32_t)pos;
-    if (dt < (1000 * 4000u)) return;
-    int32_t delta = (int32_t)(pos - last_qei);
-    int dt_ms = dt / 4000u;
-    encoder_dir = (delta > 0) - (delta < 0);
-    encoder_rpm = (dt_ms > 0) ? (int)((int64_t)(delta > 0 ? delta : -delta) * 60000 / (ENCODER_PPR * 4 * dt_ms)) : 0;
-    last_qei = pos; last_tick = tick;
+static int32_t encoder_read(void) {
+    return (int32_t)POS1CNT + encoder_offset;
 }
 
 // ── Motor ──
@@ -114,56 +122,173 @@ static void motor_init(void) {
     TRISBCLR  = (1 << 13) | (1 << 14);
     DIR_PIN = DIR_CW; ENA_PIN = ENA_OFF;
 
-    T2CON = 0; T2CONbits.TCKPS = 3;
+    T2CON = 0; T2CONbits.TCKPS = 3;  // 1:8 (3-bit TCKPS: 011 = 1:8)
     PR2 = 49999; TMR2 = 0;
     OC1CON = 0; OC1R = 25000; OC1RS = 25000;
     OC1CONbits.OCM = 0b110; OC1CONbits.OCTSEL = 0;
 }
 
-static void motor_set_speed(int steps_per_sec) {
-    if (steps_per_sec <= 0) {
-        OC1CONbits.ON = 0; T2CONbits.ON = 0; ENA_PIN = ENA_OFF; return;
-    }
+static void motor_set_speed(uint32_t steps_per_sec) {
+    if (steps_per_sec == 0) { OC1CONbits.ON = 0; T2CONbits.ON = 0; return; }
     uint32_t pr = 500000 / steps_per_sec;
     if (pr < 2) pr = 2;
     if (pr > 65535) pr = 65535;
     PR2 = pr - 1; OC1R = pr >> 1; OC1RS = pr >> 1;
-    TMR2 = 0;
-    ENA_PIN = ENA_ON; DIR_PIN = dir;
-    T2CONbits.ON = 1; OC1CONbits.ON = 1;
+    TMR2 = 0; T2CONbits.ON = 1; OC1CONbits.ON = 1;
+}
+
+static void motor_disable(void) {
+    OC1CONbits.ON = 0; T2CONbits.ON = 0; ENA_PIN = ENA_OFF;
+}
+
+// ── Position Control Loop (1 kHz via Timer3) ──
+static void control_init(void) {
+    T3CON = 0; T3CONbits.TCKPS = 0;
+    PR3 = (PB_CLOCK / CONTROL_FREQ) - 1;
+    TMR3 = 0;
+    IPC3bits.T3IP = 4;
+    IFS0CLR = (1 << 14);
+    IEC0SET = (1 << 14);
+    T3CONbits.ON = 1;
+}
+
+void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
+    IFS0CLR = (1 << 14);
+
+    if (open_loop) return;
+
+    // ── Position mode ──
+    int32_t actual = encoder_read();
+    int32_t error = target_pos - actual;
+    follow_err = error;
+
+    if (error < tolerance && error > -tolerance) {
+        if (moving) { moving = 0; at_target = 1; motor_set_speed(0); }
+        current_vel = 0; cmd_vel = 0; fault_cnt = 0; return;
+    }
+
+    // Fault only when at target (something pushed motor out of position)
+    if (at_target && (error > fault_thr || error < -fault_thr)) {
+        fault_cnt++;
+        if (fault_cnt > 50) { fault = 1; motor_disable(); return; }
+    } else {
+        fault_cnt = 0;
+    }
+
+    integral += error;
+    if (integral > INTEGRAL_LIMIT) integral = INTEGRAL_LIMIT;
+    if (integral < -INTEGRAL_LIMIT) integral = -INTEGRAL_LIMIT;
+
+    int32_t target_vel = (Kp * error + Ki * integral) / 100;
+    if (target_vel > max_vel) target_vel = max_vel;
+    if (target_vel < -max_vel) target_vel = -max_vel;
+
+    // Acceleration limit: ramp cmd_vel toward target_vel
+    int32_t delta = target_vel - cmd_vel;
+    int32_t max_delta = accel_limit / CONTROL_FREQ;  // steps/sec per ISR tick
+    if (max_delta < 1) max_delta = 1;
+    if (delta > max_delta) delta = max_delta;
+    if (delta < -max_delta) delta = -max_delta;
+    cmd_vel += delta;
+    current_vel = cmd_vel;
+
+    DIR_PIN = (cmd_vel >= 0) ? DIR_CW : DIR_CCW;
+    uint32_t speed = (cmd_vel >= 0) ? cmd_vel : -cmd_vel;
+    if (speed < 10) speed = 10;
+    motor_set_speed(speed);
+    moving = 1; at_target = 0; ENA_PIN = ENA_ON;
 }
 
 // ── UART Commands ──
 #define RX_BUF_SIZE 64
 static char rx_buf[RX_BUF_SIZE];
-static int rx_idx = 0;
+static int  rx_idx = 0;
 
 static void parse_command(const char *cmd) {
-    if (cmd[0] == 'O' && cmd[1] == 'N') {
-        motor_on = 1; motor_set_speed(speed);
+    if (cmd[0] == 'T' && cmd[1] == '=') {
+        int32_t val = 0, sign = 1; const char *p = cmd + 2;
+        if (*p == '-') { sign = -1; p++; }
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        target_pos = val * sign; fault = 0; fault_cnt = 0; integral = 0; cmd_vel = 0;
+        uart_puts("OK T="); uart_putint(target_pos); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'H' && cmd[1] == 'O' && cmd[2] == 'M' && cmd[3] == 'E') {
+        encoder_offset = -(int32_t)POS1CNT;
+        target_pos = 0; fault = 0; integral = 0; fault_cnt = 0;
+        uart_puts("OK HOME\r\n");
+    }
+    else if (cmd[0] == 'S' && cmd[1] == 'T' && cmd[2] == 'O' && cmd[3] == 'P') {
+        open_loop = 0; motor_disable(); target_pos = encoder_read(); integral = 0; moving = 0; at_target = 1; fault_cnt = 0; cmd_vel = 0;
+        uart_puts("OK STOP\r\n");
+    }
+    else if (cmd[0] == 'C' && cmd[1] == 'L' && cmd[2] == 'E' && cmd[3] == 'A' && cmd[4] == 'R') {
+        fault = 0; integral = 0; fault_cnt = 0;
+        motor_init();
+        uart_puts("OK CLEAR\r\n");
+    }
+    else if (cmd[0] == 'K' && cmd[1] == 'P' && cmd[2] == '=') {
+        int32_t val = 0; const char *p = cmd + 3;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        Kp = val; uart_puts("OK KP="); uart_putint(Kp); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'K' && cmd[1] == 'I' && cmd[2] == '=') {
+        int32_t val = 0; const char *p = cmd + 3;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        Ki = val; uart_puts("OK KI="); uart_putint(Ki); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
+        int32_t val = 0; const char *p = cmd + 5;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val > 0 && val <= 10000) max_vel = val;
+        uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
+        int32_t val = 0; const char *p = cmd + 4;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val >= 0 && val <= 1000) tolerance = val;
+        uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'F' && cmd[1] == 'T' && cmd[2] == '=') {
+        int32_t val = 0; const char *p = cmd + 3;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val > 0 && val <= 100000) fault_thr = val;
+        uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'O' && cmd[1] == 'N') {
+        open_loop = 1; ENA_PIN = ENA_ON; moving = 1;
+        if (!OC1CONbits.ON) motor_set_speed(100);
         uart_puts("OK ON\r\n");
     }
     else if (cmd[0] == 'O' && cmd[1] == 'F' && cmd[2] == 'F') {
-        motor_on = 0; motor_set_speed(0);
+        open_loop = 0; motor_disable(); moving = 0; at_target = 1;
         uart_puts("OK OFF\r\n");
     }
-    else if (cmd[0] == 'C' && cmd[1] == 'W') {
-        dir = DIR_CW;
-        if (motor_on) { motor_set_speed(0); motor_set_speed(speed); }
-        uart_puts("OK CW\r\n");
+    else if (cmd[0] == 'C' && cmd[1] == 'W' && cmd[2] != 'W') {
+        DIR_PIN = DIR_CW; uart_puts("OK CW\r\n");
     }
     else if (cmd[0] == 'C' && cmd[1] == 'C' && cmd[2] == 'W') {
-        dir = DIR_CCW;
-        if (motor_on) { motor_set_speed(0); motor_set_speed(speed); }
-        uart_puts("OK CCW\r\n");
+        DIR_PIN = DIR_CCW; uart_puts("OK CCW\r\n");
     }
-    else if (cmd[0] == 'S' && cmd[1] == 'P' && cmd[2] == 'E' && cmd[3] == 'E' && cmd[4] == 'D') {
-        int32_t val = 0; const char *p = cmd + 5;
-        while (*p == ' ') p++;
+    else if (cmd[0] == 'S' && cmd[1] == 'P' && cmd[2] == 'E' && cmd[3] == 'E' && cmd[4] == 'D' && cmd[5] == '=') {
+        int32_t val = 0; const char *p = cmd + 6;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        speed = (val > 10000) ? 10000 : (val < 0) ? 0 : val;
-        if (motor_on) motor_set_speed(speed);
-        uart_puts("OK SPEED "); uart_putint(speed); uart_puts("\r\n");
+        if (val > 0 && val <= 100000) { motor_set_speed((uint32_t)val); uart_puts("OK SPEED="); uart_putint(val); uart_puts("\r\n"); }
+    }
+    else if (cmd[0] == 'Z' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'O') {
+        encoder_offset = -(int32_t)POS1CNT;
+        uart_puts("OK ZERO\r\n");
+    }
+    else if (cmd[0] == 'G' && cmd[1] == 'E' && cmd[2] == 'T') {
+        uart_puts("T="); uart_putint(target_pos);
+        uart_puts(",P="); uart_putint(encoder_read());
+        uart_puts(",E="); uart_putint(follow_err);
+        uart_puts(",V="); uart_putint(current_vel);
+        uart_puts(",KP="); uart_putint(Kp);
+        uart_puts(",KI="); uart_putint(Ki);
+        uart_puts(",MAXV="); uart_putint(max_vel);
+        uart_puts(",TOL="); uart_putint(tolerance);
+        uart_puts(",FT="); uart_putint(fault_thr);
+        uart_puts("\r\n");
     }
     else {
         uart_puts("ERR UNKNOWN\r\n");
@@ -177,47 +302,38 @@ static void uart_poll(void) {
         LED_PIN = 1;
         if (c == '\r' || c == '\n') {
             if (rx_idx > 0) { rx_buf[rx_idx] = '\0'; parse_command(rx_buf); rx_idx = 0; }
-        } else if (rx_idx == 0) {
-            // Single-char commands (only when not buffering a string)
-            if (c == '0') { motor_on = 0; motor_set_speed(0); uart_puts("OK OFF\r\n"); }
-            else if (c == '1') { motor_on = 1; motor_set_speed(speed); uart_puts("OK ON\r\n"); }
-            else if (c == '2') { dir = DIR_CW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CW\r\n"); }
-            else if (c == '3') { dir = DIR_CCW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CCW\r\n"); }
-            else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
-        } else if (rx_idx < RX_BUF_SIZE - 1) {
-            rx_buf[rx_idx++] = c;
-        }
+        } else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
         LED_PIN = 0;
         c = uart_getchar();
     }
 }
 
 static void send_status(void) {
-    uart_puts("RPM:"); uart_putint(encoder_rpm);
-    uart_puts(",DIR:"); uart_puts(dir == DIR_CW ? "CW" : "CCW");
-    uart_puts(",ON:"); uart_puts(motor_on ? "1" : "0");
-    uart_puts(",POS:"); uart_putint(encoder_pos);
+    int32_t actual = encoder_read();
+    uart_puts("P:"); uart_putint(actual);
+    uart_puts(",E:"); uart_putint(follow_err);
+    uart_puts(",V:"); uart_putint(current_vel);
+    uart_puts(",T:"); uart_putint(target_pos);
+    uart_puts(",F:"); uart_putint(fault ? 1 : 0);
+    uart_puts(",M:"); uart_putint(moving ? 1 : 0);
+    uart_puts(",A:"); uart_putint(at_target ? 1 : 0);
     uart_puts("\r\n");
 }
 
 // ── Main ──
 int main(void) {
     ANSELA = 0; TRISACLR = (1 << 10); LED_PIN = 0;
-    uart_init(); qei_init(); motor_init();
+    __builtin_enable_interrupts();
+    uart_init(); qei_init(); motor_init(); control_init();
 
-    // Auto-start motor at 2000 steps/s CW
-    speed = 2000;
-    dir = DIR_CW;
-    motor_on = 1;
-    motor_set_speed(speed);
-
-    uart_puts("\r\n===== SPEED CONTROL =====\r\n");
-    uart_puts("ON OFF CW CCW SPEED <steps/s>\r\n");
+    uart_puts("\r\n===== POSITION CONTROL =====\r\n");
+    uart_puts("T=<pos> HOME STOP CLEAR KP=<n> KI=<n>\r\n");
+    uart_puts("MAXV=<n> TOL=<n> FT=<n> ZERO GET\r\n");
+    uart_puts("ON OFF CW CCW SPEED=<n>\r\n");
 
     uint32_t last_status = core_ticks();
     for (;;) {
         uart_poll();
-        encoder_poll();
         if ((core_ticks() - last_status) >= (PB_CLOCK / 10)) {
             send_status(); last_status = core_ticks(); LED_PIN = !LED_PIN;
         }
