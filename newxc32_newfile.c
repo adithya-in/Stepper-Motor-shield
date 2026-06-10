@@ -40,13 +40,13 @@ static void syskey_unlock(void) {
 // ── UART ──
 static void uart_init(void) {
     syskey_unlock(); CFGCONbits.IOLOCK = 0;
-    RPE0R = 1; U1RXR = 1;
+    RPE0R = 1; U1RXR = 10;
     syskey_unlock(); CFGCONbits.IOLOCK = 1;
     ANSELECLR = (1 << 0); TRISECLR = (1 << 0);
     ANSELGCLR = (1 << 8); TRISGSET = (1 << 8);
     U1MODE = 0;
     U1BRG = (PB_CLOCK / (16 * 19200)) - 1;
-    U1MODEbits.UARTEN = 1; U1STAbits.UTXEN = 1;
+    U1MODEbits.UARTEN = 1; U1STAbits.UTXEN = 1; U1STAbits.URXEN = 1;
 }
 
 static void uart_putchar(char c) { while (U1STAbits.UTXBF); U1TXREG = c; }
@@ -65,6 +65,13 @@ static void uart_putint(int32_t val) {
 
 static char uart_getchar(void) {
     return U1STAbits.URXDA ? U1RXREG : (char)-1;
+}
+
+static void uart_clear_oerr(void) {
+    if (U1STAbits.OERR) {
+        U1STACLR = _U1STA_OERR_MASK;
+        while (U1STAbits.URXDA) (void)U1RXREG;
+    }
 }
 
 // ── Encoder (QEI1) ──
@@ -164,22 +171,23 @@ static void parse_command(const char *cmd) {
 }
 
 static void uart_poll(void) {
+    uart_clear_oerr();
     char c = uart_getchar();
     while (c != (char)-1) {
-        // Single-char commands for instant response
-        if (c == '0') { motor_on = 0; motor_set_speed(0); LED_PIN = 0; uart_puts("OK OFF\r\n"); }
-        else if (c == '1') { motor_on = 1; motor_set_speed(speed); LED_PIN = 1; uart_puts("OK ON\r\n"); }
-        else if (c == '2') { dir = DIR_CW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CW\r\n"); }
-        else if (c == '3') { dir = DIR_CCW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CCW\r\n"); }
-        else {
-            // Show LED blip for any RX activity
-            LED_PIN = 1;
-            // Buffer for string commands
-            if (c == '\r' || c == '\n') {
-                if (rx_idx > 0) { rx_buf[rx_idx] = '\0'; parse_command(rx_buf); rx_idx = 0; }
-                LED_PIN = 0;
-            } else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
+        LED_PIN = 1;
+        if (c == '\r' || c == '\n') {
+            if (rx_idx > 0) { rx_buf[rx_idx] = '\0'; parse_command(rx_buf); rx_idx = 0; }
+        } else if (rx_idx == 0) {
+            // Single-char commands (only when not buffering a string)
+            if (c == '0') { motor_on = 0; motor_set_speed(0); uart_puts("OK OFF\r\n"); }
+            else if (c == '1') { motor_on = 1; motor_set_speed(speed); uart_puts("OK ON\r\n"); }
+            else if (c == '2') { dir = DIR_CW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CW\r\n"); }
+            else if (c == '3') { dir = DIR_CCW; if (motor_on) { motor_set_speed(0); motor_set_speed(speed); } uart_puts("OK CCW\r\n"); }
+            else if (rx_idx < RX_BUF_SIZE - 1) { rx_buf[rx_idx++] = c; }
+        } else if (rx_idx < RX_BUF_SIZE - 1) {
+            rx_buf[rx_idx++] = c;
         }
+        LED_PIN = 0;
         c = uart_getchar();
     }
 }

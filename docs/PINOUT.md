@@ -6,6 +6,10 @@
 
 All TB6600 `-` pins are tied together to **GND**. All `+` pins are driven by PIC32MK GPIO.
 
+**Critical**: ENA+ LOW = enabled, HIGH = disabled. Do NOT tie ENA- to ENA+ or bypass
+the optocoupler — the TB6600's internal circuit needs PUL-/DIR-/ENA- as the return
+path. Connecting ENA- alone without PUL-/DIR- also tied to GND will not work.
+
 | TB6600 | PIC32MK Pin | Pin # (64-TQFP) | Notes |
 |---|---|---|---|
 | **PUL+** | **RPB15** (OC1) | 44 | 50% duty PWM, rate = `STEP_RATE` Hz |
