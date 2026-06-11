@@ -39,6 +39,7 @@ static int32_t tolerance   = 5;
 static int32_t fault_thr   = 500;
 static int32_t accel_limit = 500;   // steps/s²
 static int32_t jerk_limit  = 30000; // steps/s³
+static uint8_t profile = 0;         // 0 = S-curve, 1 = Trapezoidal
 
 static int32_t encoder_offset = 0;
 static int32_t integral = 0;
@@ -187,24 +188,29 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
     if (raw_vel > max_vel) raw_vel = max_vel;
     if (raw_vel < -max_vel) raw_vel = -max_vel;
 
-    // ── Jerk-limited S-curve smoother ──
+    // ── Motion profile smoother ──
     // Step 1: target acceleration from velocity error
     int32_t verr = raw_vel - sm_vel;
     int32_t tgt_acc = (verr > 0) ? accel_limit : -accel_limit;
     int32_t accel_needed = abs(verr) * CONTROL_FREQ;
     if (accel_needed < accel_limit) tgt_acc = (verr > 0) ? accel_needed : -accel_needed;
 
-    // Step 2: jerk-limit the acceleration change
-    int32_t astep = tgt_acc - sm_acc;
-    int32_t max_jstep = jerk_limit / CONTROL_FREQ;
-    if (max_jstep < 1) max_jstep = 1;
-    if (astep > max_jstep) astep = max_jstep;
-    if (astep < -max_jstep) astep = -max_jstep;
-    sm_acc += astep;
-    if (sm_acc > accel_limit) sm_acc = accel_limit;
-    if (sm_acc < -accel_limit) sm_acc = -accel_limit;
+    if (profile == 1) {
+        // Trapezoidal: instant acceleration change (linear ramp)
+        sm_acc = tgt_acc;
+    } else {
+        // S-curve: jerk-limited acceleration change
+        int32_t astep = tgt_acc - sm_acc;
+        int32_t max_jstep = jerk_limit / CONTROL_FREQ;
+        if (max_jstep < 1) max_jstep = 1;
+        if (astep > max_jstep) astep = max_jstep;
+        if (astep < -max_jstep) astep = -max_jstep;
+        sm_acc += astep;
+        if (sm_acc > accel_limit) sm_acc = accel_limit;
+        if (sm_acc < -accel_limit) sm_acc = -accel_limit;
+    }
 
-    // Step 3: integrate acceleration → velocity (with fractional remainder)
+    // Step 2: integrate acceleration → velocity (with fractional remainder)
     vfrac += sm_acc;
     int32_t vd = vfrac / CONTROL_FREQ;
     sm_vel += vd;
@@ -309,6 +315,11 @@ static void parse_command(const char *cmd) {
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val > 0 && val <= 100000) { motor_set_speed((uint32_t)val); uart_puts("OK SPEED="); uart_putint(val); uart_puts("\r\n"); }
     }
+    else if (cmd[0] == 'P' && cmd[1] == 'R' && cmd[2] == 'O' && cmd[3] == 'F' && cmd[4] == 'I' && cmd[5] == 'L' && cmd[6] == 'E' && cmd[7] == '=') {
+        if (cmd[8] == 'S') { profile = 0; uart_puts("OK PROFILE=S (S-curve)\r\n"); }
+        else if (cmd[8] == 'T') { profile = 1; uart_puts("OK PROFILE=T (Trapezoidal)\r\n"); }
+        else { uart_puts("ERR USE PROFILE=S OR PROFILE=T\r\n"); }
+    }
     else if (cmd[0] == 'Z' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'O') {
         encoder_offset = -(int32_t)POS1CNT;
         uart_puts("OK ZERO\r\n");
@@ -325,6 +336,7 @@ static void parse_command(const char *cmd) {
         uart_puts(",JERK="); uart_putint(jerk_limit);
         uart_puts(",TOL="); uart_putint(tolerance);
         uart_puts(",FT="); uart_putint(fault_thr);
+        uart_puts(",PROFILE="); uart_puts(profile ? "T" : "S");
         uart_puts("\r\n");
     }
     else {
@@ -366,7 +378,8 @@ int main(void) {
     uart_puts("\r\n===== POSITION CONTROL =====\r\n");
     uart_puts("T=<pos> HOME STOP CLEAR KP=<n> KI=<n>\r\n");
     uart_puts("MAXV=<n> ACCEL=<n> JERK=<n> TOL=<n> FT=<n>\r\n");
-    uart_puts("ZERO GET ON OFF CW CCW SPEED=<n>\r\n");
+    uart_puts("PROFILE=S PROFILE=T ZERO GET\r\n");
+    uart_puts("ON OFF CW CCW SPEED=<n>\r\n");
 
     uint32_t last_status = core_ticks();
     for (;;) {
