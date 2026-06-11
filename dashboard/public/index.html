@@ -84,6 +84,21 @@
         <button id="btn-maxv" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
+        <label>ACCEL: <span id="accel-label">500</span></label>
+        <input type="range" id="accel-slider" min="10" max="5000" value="500" class="pid-slider">
+      </div>
+      <div class="pid-row">
+        <label>JERK: <span id="jerk-label">30000</span></label>
+        <input type="range" id="jerk-slider" min="100" max="200000" value="30000" class="pid-slider">
+      </div>
+      <div class="pid-row">
+        <label>Profile:</label>
+        <span id="profile-toggle" class="toggle-group">
+          <button id="btn-profile-s" class="btn btn-small active">S-curve</button>
+          <button id="btn-profile-t" class="btn btn-small">Trapezoidal</button>
+        </span>
+      </div>
+      <div class="pid-row">
         <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"></label>
         <button id="btn-tol" class="btn btn-small">Set</button>
       </div>

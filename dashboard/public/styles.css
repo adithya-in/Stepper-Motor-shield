@@ -105,6 +105,11 @@ main {
 .btn-stop:hover { opacity: 0.9; }
 .btn-small { flex: 0; padding: 0.35rem 0.75rem; }
 
+/* Profile toggle */
+.toggle-group { display: flex; gap: 0.25rem; }
+.toggle-group .btn { border-radius: 6px; font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+.toggle-group .btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
 /* Status table */
 .status-card td { padding: 0.35rem 0; font-size: 0.9rem; }
 .status-card td:first-child { color: var(--muted); padding-right: 1.5rem; }

@@ -149,10 +149,20 @@ ws.onmessage = (event) => {
     if (data.moving !== undefined) els.statusMoving.textContent = data.moving ? 'Yes' : 'No';
     if (data.atTarget !== undefined) els.statusATarget.textContent = data.atTarget ? 'Yes' : 'No';
     if (data.connected !== undefined) updateConnection(data);
+    if (data.profile !== undefined) {
+      if (data.profile === 'S') {
+        els.btnProfileS.classList.add('active');
+        els.btnProfileT.classList.remove('active');
+      } else {
+        els.btnProfileT.classList.add('active');
+        els.btnProfileS.classList.remove('active');
+      }
+    }
     updateTimestamp();
   } catch (e) {}
 };
 
+ws.onopen = () => setTimeout(() => sendCmd('GET'), 300);
 ws.onclose = () => updateConnection({ connected: false, port: null });
 
 function sendCmd(cmd) { ws.send(JSON.stringify({ command: cmd })); }
@@ -226,6 +236,41 @@ els.btnFt.addEventListener('click', () => {
   if (!isNaN(val) && val > 0) sendCmd('FT=' + val);
 });
 
+// ── Profile Controls ──
+els.btnProfileS = document.getElementById('btn-profile-s');
+els.btnProfileT = document.getElementById('btn-profile-t');
+els.accelSlider = document.getElementById('accel-slider');
+els.accelLabel = document.getElementById('accel-label');
+els.jerkSlider = document.getElementById('jerk-slider');
+els.jerkLabel = document.getElementById('jerk-label');
+
+els.btnProfileS.addEventListener('click', () => {
+  els.btnProfileS.classList.add('active');
+  els.btnProfileT.classList.remove('active');
+  sendCmd('PROFILE=S');
+});
+
+els.btnProfileT.addEventListener('click', () => {
+  els.btnProfileT.classList.add('active');
+  els.btnProfileS.classList.remove('active');
+  sendCmd('PROFILE=T');
+});
+
+els.accelSlider.addEventListener('input', () => {
+  els.accelLabel.textContent = els.accelSlider.value;
+});
+els.accelSlider.addEventListener('change', () => {
+  sendCmd('ACCEL=' + els.accelSlider.value);
+});
+
+els.jerkSlider.addEventListener('input', () => {
+  els.jerkLabel.textContent = els.jerkSlider.value;
+});
+els.jerkSlider.addEventListener('change', () => {
+  sendCmd('JERK=' + els.jerkSlider.value);
+});
+
+// ── Port Modal ──
 els.btnPorts.addEventListener('click', showModal);
 els.btnRefresh.addEventListener('click', fetchPorts);
 els.btnConnect.addEventListener('click', connectToPort);

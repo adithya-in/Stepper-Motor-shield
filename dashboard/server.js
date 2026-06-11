@@ -81,9 +81,9 @@ function disconnectSerial() {
 }
 
 function parseLine(line) {
-  if (!line || line.startsWith('=') || line.startsWith('OK') || line.startsWith('ERR')) return null;
+  if (!line || line.startsWith('=') || line.startsWith('ERR')) return null;
   const result = {};
-  // New position control format: P:<pos>,E:<err>,V:<vel>,T:<target>,F:<fault>,M:<moving>,A:<at_target>
+  // Status line: P:<pos>,E:<err>,V:<vel>,T:<target>,F:<fault>,M:<moving>,A:<at_target>
   const m = /P:(-?\d+),E:(-?\d+),V:(-?\d+),T:(-?\d+),F:(\d+),M:(\d+),A:(\d+)/.exec(line);
   if (m) {
     result.position = parseInt(m[1], 10);
@@ -93,7 +93,11 @@ function parseLine(line) {
     result.fault = m[5] === '1';
     result.moving = m[6] === '1';
     result.atTarget = m[7] === '1';
+    return Object.keys(result).length ? result : null;
   }
+  // GET response: T=...,PROFILE=S/T etc.
+  const p = /PROFILE=([ST])/.exec(line);
+  if (p) result.profile = p[1];
   return Object.keys(result).length ? result : null;
 }
 
