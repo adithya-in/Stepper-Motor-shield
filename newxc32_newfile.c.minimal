@@ -1,0 +1,22 @@
+#include <xc.h>
+
+#pragma config FNOSC   = FRC
+#pragma config POSCMOD  = OFF
+#pragma config FWDTEN   = OFF
+#pragma config FDMTEN   = OFF
+#pragma config ICESEL   = ICS_PGx2
+#pragma config JTAGEN   = OFF
+
+int main(void) {
+    ANSELA = 0; TRISACLR = (1 << 10);
+    SYSKEY = 0xAA996655; SYSKEY = 0x556699AA;
+    CFGCONbits.IOLOCK = 0; RPE0R = 1; CFGCONbits.IOLOCK = 1; SYSKEY = 0;
+    ANSELECLR = (1 << 0); TRISECLR = (1 << 0);
+    U1BRG = 12; U1MODEbits.UARTEN = 1; U1STAbits.UTXEN = 1;
+    while (1) {
+        LATAbits.LATA10 = !LATAbits.LATA10;
+        const char msg[] = "HELLO\r\n";
+        for (int i = 0; msg[i]; i++) { while (U1STAbits.UTXBF); U1TXREG = msg[i]; }
+        for (volatile int d = 0; d < 2000000; d++);
+    }
+}
