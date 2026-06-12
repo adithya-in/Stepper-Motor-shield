@@ -95,9 +95,21 @@ function parseLine(line) {
     result.atTarget = m[7] === '1';
     return Object.keys(result).length ? result : null;
   }
-  // GET response: T=...,PROFILE=S/T etc.
+  // GET response: T=...,PROFILE=S/T,ACCEL=,JERK=,MAXV=,KD=,I=,US= etc.
   const p = /PROFILE=([ST])/.exec(line);
   if (p) result.profile = p[1];
+  const a = /ACCEL=(-?\d+)/.exec(line);
+  if (a) result.accel = parseInt(a[1], 10);
+  const j = /JERK=(-?\d+)/.exec(line);
+  if (j) result.jerk = parseInt(j[1], 10);
+  const mv = /MAXV=(-?\d+)/.exec(line);
+  if (mv) result.maxv = parseInt(mv[1], 10);
+  const kd = /KD=(-?\d+)/.exec(line);
+  if (kd) result.kd = parseInt(kd[1], 10);
+  const i = /I=(-?\d+)/.exec(line);
+  if (i) result.i = parseInt(i[1], 10);
+  const us = /US=(-?\d+)/.exec(line);
+  if (us) result.us = parseInt(us[1], 10);
   return Object.keys(result).length ? result : null;
 }
 

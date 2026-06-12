@@ -158,6 +158,9 @@ ws.onmessage = (event) => {
         els.btnProfileS.classList.remove('active');
       }
     }
+    if (data.accel !== undefined) els.accelInput.value = data.accel;
+    if (data.jerk !== undefined) els.jerkInput.value = data.jerk;
+    if (data.maxv !== undefined) els.maxvInput.value = data.maxv;
     updateTimestamp();
   } catch (e) {}
 };
@@ -239,10 +242,10 @@ els.btnFt.addEventListener('click', () => {
 // ── Profile Controls ──
 els.btnProfileS = document.getElementById('btn-profile-s');
 els.btnProfileT = document.getElementById('btn-profile-t');
-els.accelSlider = document.getElementById('accel-slider');
-els.accelLabel = document.getElementById('accel-label');
-els.jerkSlider = document.getElementById('jerk-slider');
-els.jerkLabel = document.getElementById('jerk-label');
+els.accelInput = document.getElementById('accel-input');
+els.btnAccel = document.getElementById('btn-accel');
+els.jerkInput = document.getElementById('jerk-input');
+els.btnJerk = document.getElementById('btn-jerk');
 
 els.btnProfileS.addEventListener('click', () => {
   els.btnProfileS.classList.add('active');
@@ -256,18 +259,14 @@ els.btnProfileT.addEventListener('click', () => {
   sendCmd('PROFILE=T');
 });
 
-els.accelSlider.addEventListener('input', () => {
-  els.accelLabel.textContent = els.accelSlider.value;
-});
-els.accelSlider.addEventListener('change', () => {
-  sendCmd('ACCEL=' + els.accelSlider.value);
+els.btnAccel.addEventListener('click', () => {
+  const val = parseInt(els.accelInput.value, 10);
+  if (!isNaN(val) && val >= 100) sendCmd('ACCEL=' + val);
 });
 
-els.jerkSlider.addEventListener('input', () => {
-  els.jerkLabel.textContent = els.jerkSlider.value;
-});
-els.jerkSlider.addEventListener('change', () => {
-  sendCmd('JERK=' + els.jerkSlider.value);
+els.btnJerk.addEventListener('click', () => {
+  const val = parseInt(els.jerkInput.value, 10);
+  if (!isNaN(val) && val >= 1000) sendCmd('JERK=' + val);
 });
 
 // ── Port Modal ──

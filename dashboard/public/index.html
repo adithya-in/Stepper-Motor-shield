@@ -64,7 +64,7 @@
       </div>
       <div class="motor-row">
         <label>Speed: <span id="speed-label">100</span> steps/s</label>
-        <input type="range" id="speed-slider" min="10" max="10000" value="100" class="speed-slider">
+        <input type="range" id="speed-slider" min="10" max="50000" value="100" class="speed-slider">
       </div>
     </section>
 
@@ -80,16 +80,16 @@
         <input type="range" id="ki-slider" min="0" max="100" value="5" class="pid-slider">
       </div>
       <div class="pid-row">
-        <label>MaxV: <input type="number" id="maxv-input" value="2000" min="10" max="10000" class="pid-num"></label>
+        <label>MaxV: <input type="number" id="maxv-input" value="5000" min="10" max="50000" class="pid-num"></label>
         <button id="btn-maxv" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
-        <label>ACCEL: <span id="accel-label">500</span></label>
-        <input type="range" id="accel-slider" min="10" max="5000" value="500" class="pid-slider">
+        <label>ACCEL: <input type="number" id="accel-input" value="50000" min="100" max="500000" class="pid-num"></label>
+        <button id="btn-accel" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
-        <label>JERK: <span id="jerk-label">30000</span></label>
-        <input type="range" id="jerk-slider" min="100" max="200000" value="30000" class="pid-slider">
+        <label>JERK: <input type="number" id="jerk-input" value="500000" min="1000" max="10000000" class="pid-num"></label>
+        <button id="btn-jerk" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
         <label>Profile:</label>
