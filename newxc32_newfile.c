@@ -247,7 +247,7 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
 
     if (error < tolerance && error > -tolerance) {
         if (moving) { moving = 0; at_target = 1; motor_set_speed(0); }
-        current_vel = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; fault_cnt = 0; return;
+        current_vel = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; fault_cnt = 0; integral = 0; prev_error = 0; return;
     }
 
     // Fault only when at target (something pushed motor out of position)
@@ -258,19 +258,38 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
         fault_cnt = 0;
     }
 
-    integral += error;
+    // ── Profile velocity (feed-forward) ──
+    uint32_t abs_err = (error > 0) ? error : -error;
+    int32_t profile_vel = 0;
+
+    if (abs_err > (uint32_t)tolerance) {
+        uint32_t stop_d = (uint32_t)((int64_t)max_vel * max_vel / (2 * accel_limit + 1));
+        if (stop_d < 10) stop_d = 10;
+        if (abs_err > stop_d) {
+            profile_vel = (error > 0) ? max_vel : -max_vel;
+        } else {
+            int32_t decel_vel = (int32_t)((int64_t)max_vel * abs_err / stop_d);
+            if (decel_vel < 10) decel_vel = 10;
+            profile_vel = (error > 0) ? decel_vel : -decel_vel;
+        }
+    }
+
+    // ── PID trim (anti-windup during moves) ──
+    if (abs_err > (uint32_t)tolerance) integral = 0;
+    else integral += error;
     if (integral > INTEGRAL_LIMIT) integral = INTEGRAL_LIMIT;
     if (integral < -INTEGRAL_LIMIT) integral = -INTEGRAL_LIMIT;
 
-    // ── PID → target velocity ──
     int32_t derivative = error - prev_error;
     prev_error = error;
-    int32_t raw_vel = (Kp * error + Ki * integral + Kd * derivative) / 100;
+    int32_t pid_trim = (Kp * error + Ki * integral + Kd * derivative) / 100;
+
+    // ── Combined target velocity ──
+    int32_t raw_vel = profile_vel + pid_trim;
     if (raw_vel > max_vel) raw_vel = max_vel;
     if (raw_vel < -max_vel) raw_vel = -max_vel;
 
     // ── Motion profile smoother ──
-    // Step 1: target acceleration from velocity error
     int32_t verr = raw_vel - sm_vel;
     int32_t tgt_acc = (verr > 0) ? accel_limit : -accel_limit;
     int32_t accel_needed = abs(verr) * CONTROL_FREQ;
