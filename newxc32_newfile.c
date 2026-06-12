@@ -48,6 +48,78 @@ static uint32_t tlm_period = 100;   // ms
 static uint8_t tlm_enabled = 1;
 static uint32_t tlm_ticks = (PB_CLOCK * 100) / 1000;
 
+static inline uint32_t core_ticks(void);
+
+// ── NVM Config (non-volatile flash storage) ──
+#define CONFIG_ADDR   0x1D07F000
+#define CONFIG_MAGIC  0xBEADC0DE
+#define CONFIG_DATA_WORDS 12
+
+typedef struct {
+    int32_t  Kp, Ki, Kd;
+    int32_t  max_vel, tolerance, fault_thr;
+    int32_t  accel_limit, jerk_limit;
+    int32_t  coil_current;
+    uint32_t profile, microstep;
+} ConfigData;
+
+static uint8_t config_dirty = 0;
+static uint32_t config_save_time = 0;
+
+static uint32_t config_checksum(const uint32_t *d, int n) {
+    uint32_t c = 0; for (int i = 0; i < n; i++) c ^= d[i]; return c;
+}
+
+static void nvm_unlock(void) {
+    __builtin_disable_interrupts();
+    NVMKEY = 0xAA996655;
+    NVMKEY = 0x556699AA;
+    NVMCONSET = _NVMCON_WR_MASK;
+    while (NVMCONbits.WR);
+    __builtin_enable_interrupts();
+}
+
+static void nvm_erase_page(uint32_t addr) {
+    NVMCON = 0; NVMCONbits.NVMOP = 4; NVMCONbits.WREN = 1;
+    NVMADDR = addr; nvm_unlock(); NVMCONbits.WREN = 0;
+}
+
+static void nvm_write_word(uint32_t addr, uint32_t data) {
+    NVMCON = 0; NVMCONbits.NVMOP = 1; NVMCONbits.WREN = 1;
+    NVMADDR = addr; NVMDATA0 = data; nvm_unlock(); NVMCONbits.WREN = 0;
+}
+
+static void config_save(void) {
+    ConfigData d;
+    d.Kp = Kp; d.Ki = Ki; d.Kd = Kd;
+    d.max_vel = max_vel; d.tolerance = tolerance; d.fault_thr = fault_thr;
+    d.accel_limit = accel_limit; d.jerk_limit = jerk_limit;
+    d.coil_current = coil_current; d.profile = profile; d.microstep = microstep;
+
+    nvm_erase_page(CONFIG_ADDR & 0xFFFFF000);
+    uint32_t *w = (uint32_t*)&d;
+    nvm_write_word(CONFIG_ADDR, CONFIG_MAGIC);
+    for (int i = 0; i < CONFIG_DATA_WORDS; i++)
+        nvm_write_word(CONFIG_ADDR + 4 + i * 4, w[i]);
+    nvm_write_word(CONFIG_ADDR + 4 + CONFIG_DATA_WORDS * 4, config_checksum(w, CONFIG_DATA_WORDS));
+}
+
+static void config_load(void) {
+    const volatile uint32_t *f = (const volatile uint32_t *)0xBD07F000;
+    if (f[0] != CONFIG_MAGIC) return;
+    const volatile uint32_t *d = f + 1;
+    uint32_t cksum = config_checksum((const uint32_t *)d, CONFIG_DATA_WORDS);
+    if (cksum != f[1 + CONFIG_DATA_WORDS]) return;
+    Kp = d[0]; Ki = d[1]; Kd = d[2];
+    max_vel = d[3]; tolerance = d[4]; fault_thr = d[5];
+    accel_limit = d[6]; jerk_limit = d[7];
+    coil_current = d[8]; profile = d[9]; microstep = d[10];
+}
+
+static void config_mark_dirty(void) {
+    config_dirty = 1; config_save_time = core_ticks();
+}
+
 static int32_t encoder_offset = 0;
 static int32_t integral = 0;
 static int32_t sm_vel = 0;  // jerk-filtered velocity (steps/s) 
@@ -267,42 +339,42 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'K' && cmd[1] == 'P' && cmd[2] == '=') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        Kp = val; uart_puts("OK KP="); uart_putint(Kp); uart_puts("\r\n");
+        Kp = val; config_mark_dirty(); uart_puts("OK KP="); uart_putint(Kp); uart_puts("\r\n");
     }
     else if (cmd[0] == 'K' && cmd[1] == 'I' && cmd[2] == '=') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        Ki = val; uart_puts("OK KI="); uart_putint(Ki); uart_puts("\r\n");
+        Ki = val; config_mark_dirty(); uart_puts("OK KI="); uart_putint(Ki); uart_puts("\r\n");
     }
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val > 0 && val <= 10000) max_vel = val;
-        uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
     }
     else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
         int32_t val = 0; const char *p = cmd + 4;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val >= 0 && val <= 1000) tolerance = val;
-        uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n");
     }
     else if (cmd[0] == 'F' && cmd[1] == 'T' && cmd[2] == '=') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val > 0 && val <= 100000) fault_thr = val;
-        uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n");
     }
     else if (cmd[0] == 'A' && cmd[1] == 'C' && cmd[2] == 'C' && cmd[3] == 'E' && cmd[4] == 'L' && cmd[5] == '=') {
         int32_t val = 0; const char *p = cmd + 6;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val >= 10 && val <= 100000) accel_limit = val;
-        uart_puts("OK ACCEL="); uart_putint(accel_limit); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK ACCEL="); uart_putint(accel_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'J' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'K' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val >= 100 && val <= 1000000) jerk_limit = val;
-        uart_puts("OK JERK="); uart_putint(jerk_limit); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK JERK="); uart_putint(jerk_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'O' && cmd[1] == 'N') {
         open_loop = 1; ENA_PIN = ENA_ON; moving = 1;
@@ -325,8 +397,8 @@ static void parse_command(const char *cmd) {
         if (val > 0 && val <= 100000) { motor_set_speed((uint32_t)val); uart_puts("OK SPEED="); uart_putint(val); uart_puts("\r\n"); }
     }
     else if (cmd[0] == 'P' && cmd[1] == 'R' && cmd[2] == 'O' && cmd[3] == 'F' && cmd[4] == 'I' && cmd[5] == 'L' && cmd[6] == 'E' && cmd[7] == '=') {
-        if (cmd[8] == 'S') { profile = 0; uart_puts("OK PROFILE=S (S-curve)\r\n"); }
-        else if (cmd[8] == 'T') { profile = 1; uart_puts("OK PROFILE=T (Trapezoidal)\r\n"); }
+        if (cmd[8] == 'S') { profile = 0; config_mark_dirty(); uart_puts("OK PROFILE=S (S-curve)\r\n"); }
+        else if (cmd[8] == 'T') { profile = 1; config_mark_dirty(); uart_puts("OK PROFILE=T (Trapezoidal)\r\n"); }
         else { uart_puts("ERR USE PROFILE=S OR PROFILE=T\r\n"); }
     }
     else if (cmd[0] == 'Z' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'O') {
@@ -385,13 +457,13 @@ static void parse_command(const char *cmd) {
         int32_t val = 0; const char *p = cmd + 2;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val >= 100 && val <= 5000) coil_current = val;
-        uart_puts("OK i:"); uart_putint(coil_current); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK i:"); uart_putint(coil_current); uart_puts("\r\n");
     }
     else if (cmd[0] == 'u' && cmd[1] == 's' && cmd[2] == ':') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         if (val == 1 || val == 2 || val == 4 || val == 8 || val == 16 || val == 32) microstep = val;
-        uart_puts("OK us:"); uart_putint(microstep); uart_puts("\r\n");
+        config_mark_dirty(); uart_puts("OK us:"); uart_putint(microstep); uart_puts("\r\n");
     }
     else if (cmd[0] == 'p' && cmd[1] == 'i' && cmd[2] == 'd' && cmd[3] == ':') {
         int32_t kp = 0, ki = 0, kd = 0;
@@ -405,7 +477,7 @@ static void parse_command(const char *cmd) {
                 while (*p >= '0' && *p <= '9') { kd = kd * 10 + (*p - '0'); p++; }
             }
         }
-        Kp = kp; Ki = ki; Kd = kd; prev_error = 0;
+        Kp = kp; Ki = ki; Kd = kd; prev_error = 0; config_mark_dirty();
         uart_puts("OK pid:"); uart_putint(Kp); uart_puts(":"); uart_putint(Ki); uart_puts(":"); uart_putint(Kd); uart_puts("\r\n");
     }
     else if (cmd[0] == 't' && cmd[1] == 'l' && cmd[2] == 'm' && cmd[3] == ':') {
@@ -463,6 +535,7 @@ int main(void) {
     ANSELA = 0; TRISACLR = (1 << 10); LED_PIN = 0;
     __builtin_enable_interrupts();
     uart_init(); qei_init(); motor_init(); control_init();
+    config_load();
 
     uart_puts("\r\n===== POSITION CONTROL =====\r\n");
     uart_puts("T=<pos> HOME STOP CLEAR KP=<n> KI=<n> KD=<n>\r\n");
@@ -475,6 +548,9 @@ int main(void) {
     uint32_t last_status = core_ticks();
     for (;;) {
         uart_poll();
+        if (config_dirty && ((core_ticks() - config_save_time) >= (PB_CLOCK / 10))) {
+            config_dirty = 0; config_save();
+        }
         if (tlm_enabled && ((core_ticks() - last_status) >= tlm_ticks)) {
             send_status(); last_status = core_ticks(); LED_PIN = !LED_PIN;
         }
