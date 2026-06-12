@@ -1,5 +1,23 @@
 # Changelog
 
+## v5.1.3 — 2026-06-12
+
+Snappier defaults and wider parameter ranges for aggressive moves.
+
+### Changed
+- **Default MAXV**: 2000 → 5000 steps/s (2.5× faster)
+- **Default ACCEL**: 500 → 50000 steps/s² (100× faster ramp)
+- **Default JERK**: 30000 → 500000 steps/s³ (16× faster S-curve)
+- **MAXV range**: 10000 → 50000 (5× higher top speed)
+- **ACCEL range**: 100000 → 500000 (5× faster acceleration)
+- **JERK range**: 1000000 → 10000000 (10× faster jerk)
+
+### Tips
+- `PROFILE=T` for maximum snappiness (instant acceleration, no jerk limit)
+- With `PROFILE=S`, `JERK=<n>` must be high for quick acceleration changes
+- `m:20000:80000` will hit 20000 steps/s within 40ms (at ACCEL=500000)
+- For ultimate snap: `PROFILE=T` + `ACCEL=500000` + `MAXV=50000`
+
 ## v5.1.2 — 2026-06-12
 
 Profile feed-forward velocity: motor runs at full speed until stopping distance,
