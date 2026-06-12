@@ -57,6 +57,10 @@ so the dashboard and existing scripts continue working.
 | `FT=<n>` | Fault threshold (checked only at rest) | 1–100000 counts |
 | **Diagnostics** | | |
 | `GET` | One-shot config dump | — |
+| **Multi-Point Queue** | | |
+| `Q=<pos>,<pos>,...` | Load queue (2–32 points) and start sequential execution | — |
+| `DWELL=<ms>` | Set inter-point dwell delay (0–30000 ms) | — |
+| `QSTOP` | Abort queue mid-execution | — |
 
 ### Phase 1 Commands (Colon-Separated)
 
@@ -78,6 +82,10 @@ so the dashboard and existing scripts continue working.
 | **Telemetry** | | |
 | `tlm:1:<ms>` | Enable status stream at N ms period | `tlm:1:50` |
 | `tlm:0` | Disable status stream | `tlm:0` |
+| **Multi-Point Queue** | | |
+| `q:<pos1>:<pos2>:...` | Load queue (2–32 points) and start sequential execution | `q:10000:20000:30000` |
+| `dwell:<ms>` | Set inter-point dwell delay | `dwell:1000` |
+| `qstop` | Abort queue mid-execution | `qstop` |
 | **Status Query** | | |
 | `st?` | One-shot status: position, velocity, error, flags | `st?` |
 
@@ -95,7 +103,7 @@ ERR UNKNOWN\r\n
 ### Automatic Status Stream (10 Hz default)
 
 ```
-P:<position>,E:<error>,V:<velocity>,T:<target>,F:<fault>,M:<moving>,A:<at_target>\r\n
+P:<position>,E:<error>,V:<velocity>,T:<target>,F:<fault>,M:<moving>,A:<at_target>,Q:<qidx>,QL:<qlen>\r\n
 ```
 
 Set period with `tlm:1:<ms>` (10–10000 ms), disable with `tlm:0`.
@@ -115,7 +123,7 @@ Flags bitmask:
 ### GET Response
 
 ```
-T=<target>,P=<position>,E=<error>,V=<velocity>,KP=<kp>,KI=<ki>,KD=<kd>,MAXV=<maxv>,ACCEL=<accel>,JERK=<jerk>,TOL=<tol>,FT=<ft>,PROFILE=<S|T>,I=<mA>,US=<microstep>\r\n
+T=<target>,P=<position>,E=<error>,V=<velocity>,KP=<kp>,KI=<ki>,KD=<kd>,MAXV=<maxv>,ACCEL=<accel>,JERK=<jerk>,TOL=<tol>,FT=<ft>,PROFILE=<S|T>,I=<mA>,US=<microstep>,QLEN=<n>,QIDX=<n>,DWELL=<ms>\r\n
 ```
 
 ## Usage Examples
@@ -168,6 +176,21 @@ P:5000,E:-1,V:0,T:5000,F:0,M:0,A:1
 > tlm:0          Stop streaming
 OK tlm:0
 ```
+
+### Multi-Point Queue
+
+```
+> DWELL=2000     Set 2 second pause between points
+OK DWELL=2000
+> Q=10000,30000,50000,20000  Load 4-waypoint queue
+OK Q=4 points
+> ...automatically moves: 10000 → 30000 → 50000 → 20000...
+                Each arrival: 2s dwell → next move
+> QSTOP          Abort mid-sequence
+OK QSTOP
+```
+
+Queue is automatically aborted on any manual move (`T=`, `m:`), `STOP`, `OFF`, or `en:0`.
 
 ## Accuracy
 
@@ -289,7 +312,7 @@ Firmware (PIC32MK) ←→ Serial (19200) ←→ server.js ←→ WebSocket ←�
 | Encoder | QEI1 | Continuous | AS5047U ABI, 16384 counts/rev |
 | UART | UART1 | 19200 baud | Command + telemetry |
 | NVM flash | Self-write | On change | Config storage (last flash page) |
-| Status stream | Main loop | Configurable | P:E:V:T:F:M:A telemetry |
+| Status stream | Main loop | Configurable | P:E:V:T:F:M:A:Q:QL telemetry |
 
 ### Algorithm
 
@@ -327,6 +350,7 @@ raw_vel = profile_vel + pid_trim
 
 | Tag | Date | Description |
 |-----|------|-------------|
+| **v5.2.0** | 2026-06-12 | Multi-point queue (Q=/q:), DWELL, QSTOP, dashboard queue card |
 | **v5.1.4** | 2026-06-12 | Dashboard UI ranges match firmware; ACCEL/JERK number inputs; accuracy ±1–3 counts |
 | **v5.1.3** | 2026-06-12 | Snappier defaults: MAXV=5000, ACCEL=50000, JERK=500000; ranges increased 5–10× |
 | **v5.1.2** | 2026-06-12 | Profile feed-forward velocity; full speed until stopping distance; PID trim only near target |

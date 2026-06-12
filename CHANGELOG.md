@@ -1,5 +1,23 @@
 # Changelog
 
+## v5.2.0 — 2026-06-12
+
+Multi-point queue with configurable dwell delay.
+
+### Added
+- **`Q=<pos>,<pos>,...`** — load up to 32 waypoints and start sequential execution
+- **`DWELL=<ms>`** — set inter-point dwell delay (0–30000 ms)
+- **`QSTOP` / `qstop`** — abort queue mid-execution
+- **`q:<pos>:<pos>:...`** — Phase 1 colon-separated variant
+- **`dwell:<ms>`** — Phase 1 colon-separated variant
+- Queue fields `QLEN`, `QIDX`, `DWELL` in GET response
+- Queue index/length in status telemetry (`Q:<idx>`, `QL:<len>`)
+- Dashboard queue card: textarea for points, Dwell input+Set, Start/Stop buttons, live status
+
+### Changed
+- `T=`, `m:`, `STOP`, `OFF`, `en:0` commands now abort any active queue
+- server.js parses `QLEN`, `QIDX`, `DWELL` from GET, and `Q/QL` from status stream
+
 ## v5.1.4 — 2026-06-12
 
 Dashboard UI updated to match new firmware ranges. System achieves ±1–3 counts accuracy.

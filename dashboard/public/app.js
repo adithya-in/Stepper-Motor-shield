@@ -37,6 +37,12 @@ const els = {
   btnMaxv: document.getElementById('btn-maxv'),
   btnTol: document.getElementById('btn-tol'),
   btnFt: document.getElementById('btn-ft'),
+  dwellInput: document.getElementById('dwell-input'),
+  btnDwell: document.getElementById('btn-dwell'),
+  queueInput: document.getElementById('queue-input'),
+  btnQStart: document.getElementById('btn-q-start'),
+  btnQStop: document.getElementById('btn-q-stop'),
+  queueStatus: document.getElementById('queue-status'),
 };
 
 let selectedPort = null;
@@ -161,6 +167,14 @@ ws.onmessage = (event) => {
     if (data.accel !== undefined) els.accelInput.value = data.accel;
     if (data.jerk !== undefined) els.jerkInput.value = data.jerk;
     if (data.maxv !== undefined) els.maxvInput.value = data.maxv;
+    if (data.dwell !== undefined) els.dwellInput.value = data.dwell;
+    if (data.qlen !== undefined && data.qidx !== undefined) {
+      if (data.qlen > 0) {
+        els.queueStatus.textContent = `${data.qidx} / ${data.qlen}`;
+      } else {
+        els.queueStatus.textContent = 'Idle';
+      }
+    }
     updateTimestamp();
   } catch (e) {}
 };
@@ -268,6 +282,20 @@ els.btnJerk.addEventListener('click', () => {
   const val = parseInt(els.jerkInput.value, 10);
   if (!isNaN(val) && val >= 1000) sendCmd('JERK=' + val);
 });
+
+// ── Queue Controls ──
+els.btnDwell.addEventListener('click', () => {
+  const val = parseInt(els.dwellInput.value, 10);
+  if (!isNaN(val) && val >= 0) sendCmd('DWELL=' + val);
+});
+
+els.btnQStart.addEventListener('click', () => {
+  const raw = els.queueInput.value.trim();
+  if (!raw) return;
+  sendCmd('Q=' + raw);
+});
+
+els.btnQStop.addEventListener('click', () => sendCmd('QSTOP'));
 
 // ── Port Modal ──
 els.btnPorts.addEventListener('click', showModal);

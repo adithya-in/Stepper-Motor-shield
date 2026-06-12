@@ -51,6 +51,25 @@
       </table>
     </section>
 
+    <!-- Queue Card -->
+    <section class="card queue-card">
+      <h2>Multi-Point Queue</h2>
+      <div class="queue-row">
+        <label>Dwell: <input type="number" id="dwell-input" value="500" min="0" max="30000" class="pid-num"> ms</label>
+        <button id="btn-dwell" class="btn btn-small">Set</button>
+      </div>
+      <div class="queue-row">
+        <textarea id="queue-input" rows="3" class="queue-textarea" placeholder="e.g. 10000, 20000, 30000, 40000"></textarea>
+      </div>
+      <div class="queue-row">
+        <button id="btn-q-start" class="btn btn-primary">Start Queue</button>
+        <button id="btn-q-stop" class="btn btn-stop">Stop Queue</button>
+      </div>
+      <div class="queue-row">
+        <span id="queue-status" class="queue-status">Idle</span>
+      </div>
+    </section>
+
     <!-- Motor Test Card -->
     <section class="card motor-card">
       <h2>Motor Test</h2>

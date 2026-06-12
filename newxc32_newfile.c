@@ -48,6 +48,15 @@ static uint32_t tlm_period = 100;   // ms
 static uint8_t tlm_enabled = 1;
 static uint32_t tlm_ticks = (PB_CLOCK * 100) / 1000;
 
+// ── Multi-point queue ──
+#define QUEUE_MAX 32
+static int32_t queue[QUEUE_MAX];
+static uint8_t queue_len = 0;
+static uint8_t queue_idx = 0;
+static uint8_t queue_active = 0;
+static uint32_t dwell_ms = 0;
+static uint32_t dwell_remaining = 0;
+
 static inline uint32_t core_ticks(void);
 
 // ── NVM Config (non-volatile flash storage) ──
@@ -247,7 +256,21 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
 
     if (error < tolerance && error > -tolerance) {
         if (moving) { moving = 0; at_target = 1; motor_set_speed(0); }
-        current_vel = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; fault_cnt = 0; integral = 0; prev_error = 0; return;
+        current_vel = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; fault_cnt = 0; integral = 0; prev_error = 0;
+        if (queue_active) {
+            if (queue_idx < queue_len - 1) {
+                if (dwell_remaining == 0) {
+                    queue_idx++;
+                    target_pos = queue[queue_idx];
+                    dwell_remaining = dwell_ms;
+                } else {
+                    dwell_remaining--;
+                }
+            } else {
+                queue_active = 0;
+            }
+        }
+        return;
     }
 
     // Fault only when at target (something pushed motor out of position)
@@ -339,6 +362,7 @@ static void parse_command(const char *cmd) {
         if (*p == '-') { sign = -1; p++; }
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         target_pos = val * sign; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
+        queue_active = 0; queue_len = 0; queue_idx = 0;
         uart_puts("OK T="); uart_putint(target_pos); uart_puts("\r\n");
     }
     else if (cmd[0] == 'H' && cmd[1] == 'O' && cmd[2] == 'M' && cmd[3] == 'E') {
@@ -348,6 +372,7 @@ static void parse_command(const char *cmd) {
     }
     else if (cmd[0] == 'S' && cmd[1] == 'T' && cmd[2] == 'O' && cmd[3] == 'P') {
         open_loop = 0; motor_disable(); target_pos = encoder_read(); integral = 0; moving = 0; at_target = 1; fault_cnt = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
+        queue_active = 0; queue_len = 0; queue_idx = 0;
         uart_puts("OK STOP\r\n");
     }
     else if (cmd[0] == 'C' && cmd[1] == 'L' && cmd[2] == 'E' && cmd[3] == 'A' && cmd[4] == 'R') {
@@ -402,6 +427,7 @@ static void parse_command(const char *cmd) {
     }
     else if (cmd[0] == 'O' && cmd[1] == 'F' && cmd[2] == 'F') {
         open_loop = 0; motor_disable(); moving = 0; at_target = 1;
+        queue_active = 0; queue_len = 0; queue_idx = 0;
         uart_puts("OK OFF\r\n");
     }
     else if (cmd[0] == 'C' && cmd[1] == 'W' && cmd[2] != 'W') {
@@ -440,7 +466,39 @@ static void parse_command(const char *cmd) {
         uart_puts(",PROFILE="); uart_puts(profile ? "T" : "S");
         uart_puts(",I="); uart_putint(coil_current);
         uart_puts(",US="); uart_putint(microstep);
+        uart_puts(",QLEN="); uart_putint(queue_len);
+        uart_puts(",QIDX="); uart_putint(queue_idx);
+        uart_puts(",DWELL="); uart_putint(dwell_ms);
         uart_puts("\r\n");
+    }
+    // ── Queue commands ──
+    else if (cmd[0] == 'Q' && cmd[1] == '=') {
+        int32_t val = 0; uint8_t n = 0; const char *p = cmd + 2;
+        while (*p >= '0' || *p == '-') {
+            int32_t sign = 1;
+            if (*p == '-') { sign = -1; p++; }
+            val = 0;
+            while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+            if (n < QUEUE_MAX) queue[n++] = val * sign;
+            if (*p == ',') p++;
+            else break;
+        }
+        if (n < 2) { uart_puts("ERR NEED ≥2 POINTS\r\n"); }
+        else {
+            queue_len = n; queue_idx = 0; queue_active = 1;
+            target_pos = queue[0]; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; at_target = 0;
+            uart_puts("OK Q="); uart_putint(queue_len); uart_puts(" points\r\n");
+        }
+    }
+    else if (cmd[0] == 'D' && cmd[1] == 'W' && cmd[2] == 'E' && cmd[3] == 'L' && cmd[4] == 'L' && cmd[5] == '=') {
+        int32_t val = 0; const char *p = cmd + 6;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val >= 0 && val <= 30000) dwell_ms = val;
+        uart_puts("OK DWELL="); uart_putint(dwell_ms); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'Q' && cmd[1] == 'S' && cmd[2] == 'T' && cmd[3] == 'O' && cmd[4] == 'P') {
+        queue_active = 0; queue_len = 0; queue_idx = 0;
+        uart_puts("OK QSTOP\r\n");
     }
     // ── New colon-opcode commands (Phase 1) ──
     else if (cmd[0] == 'm' && cmd[1] == ':') {
@@ -453,6 +511,7 @@ static void parse_command(const char *cmd) {
             while (*p >= '0' && *p <= '9') { pos = pos * 10 + (*p - '0'); p++; }
             pos *= sign;
         }
+        queue_active = 0; queue_len = 0; queue_idx = 0;
         if (speed > 0 && speed <= 50000) max_vel = speed;
         target_pos = pos; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
         uart_puts("OK m:"); uart_putint(speed); uart_puts(":"); uart_putint(target_pos); uart_puts("\r\n");
@@ -465,6 +524,7 @@ static void parse_command(const char *cmd) {
             uart_puts("OK en:1\r\n");
         } else if (cmd[3] == '0') {
             open_loop = 0; motor_disable(); moving = 0; at_target = 1;
+            queue_active = 0; queue_len = 0; queue_idx = 0;
             uart_puts("OK en:0\r\n");
         }
     }
@@ -519,6 +579,34 @@ static void parse_command(const char *cmd) {
         uart_puts(",f:"); uart_putint((fault ? 1 : 0) | (moving ? 2 : 0) | (at_target ? 4 : 0) | (open_loop ? 8 : 0));
         uart_puts("\r\n");
     }
+    else if (cmd[0] == 'q' && cmd[1] == ':') {
+        int32_t val = 0; uint8_t n = 0; const char *p = cmd + 2;
+        while (*p >= '0' || *p == '-') {
+            int32_t sign = 1;
+            if (*p == '-') { sign = -1; p++; }
+            val = 0;
+            while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+            if (n < QUEUE_MAX) queue[n++] = val * sign;
+            if (*p == ':') p++;
+            else break;
+        }
+        if (n < 2) { uart_puts("ERR q: NEED ≥2 POINTS\r\n"); }
+        else {
+            queue_len = n; queue_idx = 0; queue_active = 1;
+            target_pos = queue[0]; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; at_target = 0;
+            uart_puts("OK q:"); uart_putint(queue_len); uart_puts(" points\r\n");
+        }
+    }
+    else if (cmd[0] == 'd' && cmd[1] == 'w' && cmd[2] == 'e' && cmd[3] == 'l' && cmd[4] == 'l' && cmd[5] == ':') {
+        int32_t val = 0; const char *p = cmd + 6;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val >= 0 && val <= 30000) dwell_ms = val;
+        uart_puts("OK dwell:"); uart_putint(dwell_ms); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'q' && cmd[1] == 's' && cmd[2] == 't' && cmd[3] == 'o' && cmd[4] == 'p') {
+        queue_active = 0; queue_len = 0; queue_idx = 0;
+        uart_puts("OK qstop\r\n");
+    }
     else {
         uart_puts("ERR UNKNOWN\r\n");
     }
@@ -546,6 +634,8 @@ static void send_status(void) {
     uart_puts(",F:"); uart_putint(fault ? 1 : 0);
     uart_puts(",M:"); uart_putint(moving ? 1 : 0);
     uart_puts(",A:"); uart_putint(at_target ? 1 : 0);
+    uart_puts(",Q:"); uart_putint(queue_active ? queue_idx + 1 : 0);
+    uart_puts(",QL:"); uart_putint(queue_len);
     uart_puts("\r\n");
 }
 
