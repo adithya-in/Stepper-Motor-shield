@@ -1,5 +1,23 @@
 # Changelog
 
+## v5.1.2 — 2026-06-12
+
+Profile feed-forward velocity: motor runs at full speed until stopping distance,
+then decelerates. PID becomes a trim, active only near target.
+
+### Changed
+- **Profile velocity feed-forward** replaces PID as primary velocity source
+  - `profile_vel` = max_vel when far from target, linear deceleration near target
+  - Deceleration starts at stopping distance `v²/(2·accel_limit)` from target
+  - PID output added as trim on top of profile velocity
+- **Integral anti-windup** — integral reset during moves (only active near target)
+- **At-target reset** — integral and prev_error cleared on arrival
+
+### Result
+- Full speed maintained until close to target — no premature deceleration
+- `m:2000:50000` reaches max velocity and stays there until ~20 counts away (at accel_limit=100000)
+- ACCEL and JERK settings now actually control acceleration rate, not PID-decay rate
+
 ## v5.1.1 — 2026-06-12
 
 Non-volatile flash storage: all settings persist across power cycles.
