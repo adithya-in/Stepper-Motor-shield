@@ -1,5 +1,30 @@
 # Changelog
 
+## v5.1.0 — 2026-06-12
+
+Phase 1 command protocol: colon-separated opcode format, with backward-compatible legacy
+commands. Kd derivative term in PID loop. Configurable telemetry period.
+
+### Added
+- **Phase 1 commands** (colon-separated, same parser reused for CAN Phase 2):
+  - `m:<speed>:<pos>` — move to position at given speed
+  - `en:1` / `en:0` — enable closed-loop servo / disable motor
+  - `z` — set current position as zero
+  - `i:<mA>` — set coil current limit (100–5000 mA, stored value)
+  - `us:<n>` — set microstep setting (1/2/4/8/16/32, stored value)
+  - `pid:<kp>:<ki>:<kd>` — set PID gains (adds derivative term)
+  - `tlm:1:<ms>` — enable telemetry stream at configurable period (10–10000 ms)
+  - `tlm:0` — disable telemetry stream
+  - `st?` — one-shot status query: `p:<pos>,v:<vel>,e:<err>,f:<flags>`
+- **Kd derivative term** in PID controller (1 kHz, tracks `prev_error`)
+- **Configurable telemetry period** — replaces hardcoded 100 ms
+- **GET response** now includes KD, I (coil current), US (microstep)
+- **Banner** updated to show all Phase 1 commands
+
+### Legacy
+- All existing commands (`T=`, `KP=`, `KI=`, `GET`, `ON`, `OFF`, etc.) unchanged
+- Dashboard status stream format (`P:E:V:T:F:M:A`) preserved
+
 ## v5.0.1 — 2026-06-11
 
 Trapezoidal profile support with UI toggle. Selectable S-curve or trapezoidal motion profile.

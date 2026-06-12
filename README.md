@@ -8,7 +8,7 @@ magnetic encoder feedback. Controlled over USB serial (19200 baud) or web dashbo
 ```bash
 # Flash firmware (via MDB)
 rm -rf ~/.mplabcomm
-mdb -c "device PIC32MK0512MCJ064; hwtool pkob4 -p; program controller.X.production.hex; run"
+/Applications/microchip/mplabx/v6.30/mplab_platform/bin/mdb.sh flash.mdb
 
 # Connect serial
 screen /dev/cu.usbmodemBUR2143200772 19200
@@ -18,7 +18,14 @@ cd dashboard && npm install && node server.js
 # → http://localhost:3000
 ```
 
+**Power cycle the PKoB4** (unplug/replug USB) after flashing — VCOM gets stuck otherwise.
+
 ## Serial Commands
+
+All commands support both **legacy** and **Phase 1** formats. Legacy commands are preserved
+so the dashboard and existing scripts continue working.
+
+### Legacy Commands
 
 | Command | Action | Range |
 |---------|--------|-------|
@@ -33,7 +40,7 @@ cd dashboard && npm install && node server.js
 | `OFF` | Disable motor, exit open-loop mode | — |
 | `CW` | Set direction clockwise | — |
 | `CCW` | Set direction counter-clockwise | — |
-| `SPEED=<n>` | Set step rate | 10–100000 |
+| `SPEED=<n>` | Set step rate for open-loop mode | 10–100000 |
 | **Motion Profile** | | |
 | `MAXV=<n>` | Max velocity | 1–10000 steps/s |
 | `ACCEL=<n>` | Max acceleration | 10–100000 steps/s² |
@@ -48,6 +55,29 @@ cd dashboard && npm install && node server.js
 | **Diagnostics** | | |
 | `GET` | One-shot config dump | — |
 
+### Phase 1 Commands (Colon-Separated)
+
+| Command | Action | Example |
+|---------|--------|---------|
+| **Move** | | |
+| `m:<speed>:<pos>` | Move to position at given speed | `m:1500:8000` |
+| **Enable** | | |
+| `en:1` | Enable closed-loop servo (hold current position) | `en:1` |
+| `en:0` | Disable motor (release) | `en:0` |
+| **Zero** | | |
+| `z` | Set current encoder position as zero | `z` |
+| **Coil Current (stored)** | | |
+| `i:<mA>` | Set coil current limit (stored value, 100–5000 mA) | `i:800` |
+| **Microstep (stored)** | | |
+| `us:<n>` | Set microstep setting | `us:16` |
+| **PID Gains** | | |
+| `pid:<kp>:<ki>:<kd>` | Set proportional, integral, derivative gains | `pid:50:5:10` |
+| **Telemetry** | | |
+| `tlm:1:<ms>` | Enable status stream at N ms period | `tlm:1:50` |
+| `tlm:0` | Disable status stream | `tlm:0` |
+| **Status Query** | | |
+| `st?` | One-shot status: position, velocity, error, flags | `st?` |
+
 ### Response Format
 
 All commands acknowledge:
@@ -59,16 +89,64 @@ or
 ERR UNKNOWN\r\n
 ```
 
-### Automatic Status Stream (10 Hz)
+### Automatic Status Stream (10 Hz default)
 
 ```
 P:<position>,E:<error>,V:<velocity>,T:<target>,F:<fault>,M:<moving>,A:<at_target>\r\n
 ```
 
+Set period with `tlm:1:<ms>` (10–10000 ms), disable with `tlm:0`.
+
+### st? Response (one-shot)
+
+```
+p:<position>,v:<velocity>,e:<error>,f:<flags>\r\n
+```
+
+Flags bitmask:
+- bit 0: fault
+- bit 1: moving
+- bit 2: at_target
+- bit 3: open_loop
+
 ### GET Response
 
 ```
-T=<target>,P=<position>,E=<error>,V=<velocity>,KP=<kp>,KI=<ki>,MAXV=<maxv>,ACCEL=<accel>,JERK=<jerk>,TOL=<tol>,FT=<ft>,PROFILE=<S|T>\r\n
+T=<target>,P=<position>,E=<error>,V=<velocity>,KP=<kp>,KI=<ki>,KD=<kd>,MAXV=<maxv>,ACCEL=<accel>,JERK=<jerk>,TOL=<tol>,FT=<ft>,PROFILE=<S|T>,I=<mA>,US=<microstep>\r\n
+```
+
+## Usage Examples
+
+### Basic Move
+
+```
+> en:1           Enable servo (holds current position)
+OK en:1
+> m:2000:10000   Move to position 10000 at 2000 steps/s
+OK m:2000:10000
+> st?            Check status
+p:10000,v:0,e:0,f:4
+```
+
+### PID Tuning
+
+```
+> pid:30:2:5     Set Kp=30, Ki=2, Kd=5
+OK pid:30:2:5
+> GET            Verify all params
+T=10000,P=10000,E=0,V=0,KP=30,KI=2,KD=5,...
+```
+
+### Telemetry Stream
+
+```
+> tlm:1:200      Stream every 200ms
+OK tlm:1:200
+P:5000,E:-2,V:150,T:5000,F:0,M:0,A:1
+P:5000,E:-1,V:0,T:5000,F:0,M:0,A:1
+...
+> tlm:0          Stop streaming
+OK tlm:0
 ```
 
 ## Motion Profiles
@@ -151,13 +229,13 @@ Firmware (PIC32MK) ←→ Serial (19200) ←→ server.js ←→ WebSocket ←�
 | Step generation | OC1 + Timer2 PWM | Variable | Hardware step pulses, 50% duty |
 | Encoder | QEI1 | Continuous | AS5047U ABI, 16384 counts/rev |
 | UART | UART1 | 19200 baud | Command + telemetry |
-| Status stream | Main loop | 10 Hz | P:E:V:T:F:M:A telemetry |
+| Status stream | Main loop | Configurable | P:E:V:T:F:M:A telemetry |
 
 ### S-Curve Algorithm (control_isr)
 
 ```
 error = target_pos - encoder_read()
-raw_vel = PID(error)
+raw_vel = PID(error + integral + derivative) / 100
 verr = raw_vel - sm_vel
 tgt_acc = sign(verr) * accel_limit (or less if near target)
 
@@ -170,8 +248,20 @@ else (PROFILE=T):
 sm_vel += sm_acc * dt
 ```
 
+### Resolution
+
+| Aspect | Value |
+|--------|-------|
+| Motor steps/rev | 200 (NEMA17, 1.8°/step) |
+| Microstep (S4–S6 all ON) | 1/16 |
+| Steps per revolution | 3200 |
+| Encoder PPR | 4096 (AS5047U) |
+| Encoder counts/rev (4× QEI) | 16384 |
+| Position resolution | 360° / 16384 = 0.022° per count |
+
 ## Releases
 
+- **v5.1.0** — Phase 1 commands: colon-separated opcode format, Kd derivative term, configurable telemetry, coil current & microstep storage
 - **v5.0.1** — Trapezoidal profile selectable via PROFILE=S/T, dashboard toggle
 - **v5.0.0** — PID + S-curve + open-loop test + 6 bug fixes
 - **v4.0.0** — UART serial fixes

@@ -40,6 +40,13 @@ static int32_t fault_thr   = 500;
 static int32_t accel_limit = 500;   // steps/s²
 static int32_t jerk_limit  = 30000; // steps/s³
 static uint8_t profile = 0;         // 0 = S-curve, 1 = Trapezoidal
+static int32_t Kd = 0;
+static int32_t prev_error = 0;
+static int32_t coil_current = 800;  // mA
+static uint16_t microstep = 16;
+static uint32_t tlm_period = 100;   // ms
+static uint8_t tlm_enabled = 1;
+static uint32_t tlm_ticks = (PB_CLOCK * 100) / 1000;
 
 static int32_t encoder_offset = 0;
 static int32_t integral = 0;
@@ -184,7 +191,9 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
     if (integral < -INTEGRAL_LIMIT) integral = -INTEGRAL_LIMIT;
 
     // ── PID → target velocity ──
-    int32_t raw_vel = (Kp * error + Ki * integral) / 100;
+    int32_t derivative = error - prev_error;
+    prev_error = error;
+    int32_t raw_vel = (Kp * error + Ki * integral + Kd * derivative) / 100;
     if (raw_vel > max_vel) raw_vel = max_vel;
     if (raw_vel < -max_vel) raw_vel = -max_vel;
 
@@ -331,12 +340,92 @@ static void parse_command(const char *cmd) {
         uart_puts(",V="); uart_putint(current_vel);
         uart_puts(",KP="); uart_putint(Kp);
         uart_puts(",KI="); uart_putint(Ki);
+        uart_puts(",KD="); uart_putint(Kd);
         uart_puts(",MAXV="); uart_putint(max_vel);
         uart_puts(",ACCEL="); uart_putint(accel_limit);
         uart_puts(",JERK="); uart_putint(jerk_limit);
         uart_puts(",TOL="); uart_putint(tolerance);
         uart_puts(",FT="); uart_putint(fault_thr);
         uart_puts(",PROFILE="); uart_puts(profile ? "T" : "S");
+        uart_puts(",I="); uart_putint(coil_current);
+        uart_puts(",US="); uart_putint(microstep);
+        uart_puts("\r\n");
+    }
+    // ── New colon-opcode commands (Phase 1) ──
+    else if (cmd[0] == 'm' && cmd[1] == ':') {
+        int32_t speed = 0, pos = 0, sign = 1;
+        const char *p = cmd + 2;
+        while (*p >= '0' && *p <= '9') { speed = speed * 10 + (*p - '0'); p++; }
+        if (*p == ':') {
+            p++;
+            if (*p == '-') { sign = -1; p++; }
+            while (*p >= '0' && *p <= '9') { pos = pos * 10 + (*p - '0'); p++; }
+            pos *= sign;
+        }
+        if (speed > 0 && speed <= 10000) max_vel = speed;
+        target_pos = pos; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
+        uart_puts("OK m:"); uart_putint(speed); uart_puts(":"); uart_putint(target_pos); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'e' && cmd[1] == 'n' && cmd[2] == ':') {
+        if (cmd[3] == '1') {
+            open_loop = 0; ENA_PIN = ENA_ON;
+            target_pos = encoder_read(); integral = 0; fault_cnt = 0; at_target = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
+            fault = 0; prev_error = 0;
+            uart_puts("OK en:1\r\n");
+        } else if (cmd[3] == '0') {
+            open_loop = 0; motor_disable(); moving = 0; at_target = 1;
+            uart_puts("OK en:0\r\n");
+        }
+    }
+    else if (cmd[0] == 'z' && (cmd[1] == '\0' || cmd[1] == '\r' || cmd[1] == '\n')) {
+        encoder_offset = -(int32_t)POS1CNT;
+        uart_puts("OK z\r\n");
+    }
+    else if (cmd[0] == 'i' && cmd[1] == ':') {
+        int32_t val = 0; const char *p = cmd + 2;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val >= 100 && val <= 5000) coil_current = val;
+        uart_puts("OK i:"); uart_putint(coil_current); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'u' && cmd[1] == 's' && cmd[2] == ':') {
+        int32_t val = 0; const char *p = cmd + 3;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        if (val == 1 || val == 2 || val == 4 || val == 8 || val == 16 || val == 32) microstep = val;
+        uart_puts("OK us:"); uart_putint(microstep); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 'p' && cmd[1] == 'i' && cmd[2] == 'd' && cmd[3] == ':') {
+        int32_t kp = 0, ki = 0, kd = 0;
+        const char *p = cmd + 4;
+        while (*p >= '0' && *p <= '9') { kp = kp * 10 + (*p - '0'); p++; }
+        if (*p == ':') {
+            p++;
+            while (*p >= '0' && *p <= '9') { ki = ki * 10 + (*p - '0'); p++; }
+            if (*p == ':') {
+                p++;
+                while (*p >= '0' && *p <= '9') { kd = kd * 10 + (*p - '0'); p++; }
+            }
+        }
+        Kp = kp; Ki = ki; Kd = kd; prev_error = 0;
+        uart_puts("OK pid:"); uart_putint(Kp); uart_puts(":"); uart_putint(Ki); uart_puts(":"); uart_putint(Kd); uart_puts("\r\n");
+    }
+    else if (cmd[0] == 't' && cmd[1] == 'l' && cmd[2] == 'm' && cmd[3] == ':') {
+        if (cmd[4] == '0') {
+            tlm_enabled = 0;
+            uart_puts("OK tlm:0\r\n");
+        } else if (cmd[4] == '1') {
+            int32_t val = 100; const char *p = cmd + 5;
+            if (*p == ':') { p++; val = 0; while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; } }
+            if (val >= 10 && val <= 10000) tlm_period = val;
+            tlm_enabled = 1;
+            tlm_ticks = (PB_CLOCK * tlm_period) / 1000;
+            uart_puts("OK tlm:1:"); uart_putint(tlm_period); uart_puts("\r\n");
+        }
+    }
+    else if (cmd[0] == 's' && cmd[1] == 't' && cmd[2] == '?') {
+        uart_puts("p:"); uart_putint(encoder_read());
+        uart_puts(",v:"); uart_putint(current_vel);
+        uart_puts(",e:"); uart_putint(follow_err);
+        uart_puts(",f:"); uart_putint((fault ? 1 : 0) | (moving ? 2 : 0) | (at_target ? 4 : 0) | (open_loop ? 8 : 0));
         uart_puts("\r\n");
     }
     else {
@@ -376,15 +465,17 @@ int main(void) {
     uart_init(); qei_init(); motor_init(); control_init();
 
     uart_puts("\r\n===== POSITION CONTROL =====\r\n");
-    uart_puts("T=<pos> HOME STOP CLEAR KP=<n> KI=<n>\r\n");
+    uart_puts("T=<pos> HOME STOP CLEAR KP=<n> KI=<n> KD=<n>\r\n");
     uart_puts("MAXV=<n> ACCEL=<n> JERK=<n> TOL=<n> FT=<n>\r\n");
     uart_puts("PROFILE=S PROFILE=T ZERO GET\r\n");
     uart_puts("ON OFF CW CCW SPEED=<n>\r\n");
+    uart_puts("m:<speed>:<pos> en:1/0 z i:<mA> us:<n>\r\n");
+    uart_puts("pid:<kp>:<ki>:<kd> tlm:1:<ms> tlm:0 st?\r\n");
 
     uint32_t last_status = core_ticks();
     for (;;) {
         uart_poll();
-        if ((core_ticks() - last_status) >= (PB_CLOCK / 10)) {
+        if (tlm_enabled && ((core_ticks() - last_status) >= tlm_ticks)) {
             send_status(); last_status = core_ticks(); LED_PIN = !LED_PIN;
         }
     }
