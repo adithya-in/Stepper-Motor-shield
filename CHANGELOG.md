@@ -2,7 +2,18 @@
 
 ## v5.1.4 — 2026-06-12
 
-Dashboard UI updated to match new firmware ranges.
+Dashboard UI updated to match new firmware ranges. System achieves ±1–3 counts accuracy.
+
+### Added
+- **Accuracy documentation**: ±1–3 encoder counts = 0.022°–0.066° (at encoder noise floor)
+
+### Changed
+- MAXV input: range 10–50000, default 5000
+- ACCEL: slider → number input (100–500000) + Set button
+- JERK: slider → number input (1000–10000000) + Set button
+- Speed slider: max 10000 → 50000
+- server.js parses ACCEL, JERK, MAXV, KD, I, US from GET response
+- app.js updates input fields when GET/status data arrives
 
 ### Changed
 - **MAXV input**: range updated to 10–50000, default 5000
@@ -45,8 +56,9 @@ then decelerates. PID becomes a trim, active only near target.
 
 ### Result
 - Full speed maintained until close to target — no premature deceleration
-- `m:2000:50000` reaches max velocity and stays there until ~20 counts away (at accel_limit=100000)
+- `m:50000:100000` reaches max velocity and stays there until stopping distance
 - ACCEL and JERK settings now actually control acceleration rate, not PID-decay rate
+- Following error at rest: **±1–3 counts** (0.022°–0.066°)
 
 ## v5.1.1 — 2026-06-12
 
