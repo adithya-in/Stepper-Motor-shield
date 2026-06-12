@@ -1,5 +1,17 @@
 # Changelog
 
+## v5.1.4 — 2026-06-12
+
+Dashboard UI updated to match new firmware ranges.
+
+### Changed
+- **MAXV input**: range updated to 10–50000, default 5000
+- **ACCEL**: slider replaced with number input (100–500000) + Set button
+- **JERK**: slider replaced with number input (1000–10000000) + Set button
+- **Speed slider**: max raised from 10000 to 50000
+- **server.js** now parses ACCEL, JERK, MAXV, KD, I, US from GET response
+- **app.js** updates input fields when GET/status data arrives
+
 ## v5.1.3 — 2026-06-12
 
 Snappier defaults and wider parameter ranges for aggressive moves.
