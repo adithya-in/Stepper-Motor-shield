@@ -34,11 +34,11 @@ static volatile uint16_t fault_cnt  = 0;
 
 static int32_t Kp          = 50;
 static int32_t Ki          = 5;
-static int32_t max_vel     = 2000;
+static int32_t max_vel     = 5000;
 static int32_t tolerance   = 5;
 static int32_t fault_thr   = 500;
-static int32_t accel_limit = 500;   // steps/s²
-static int32_t jerk_limit  = 30000; // steps/s³
+static int32_t accel_limit = 50000;
+static int32_t jerk_limit  = 500000;
 static uint8_t profile = 0;         // 0 = S-curve, 1 = Trapezoidal
 static int32_t Kd = 0;
 static int32_t prev_error = 0;
@@ -368,7 +368,7 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 10000) max_vel = val;
+        if (val > 0 && val <= 50000) max_vel = val;
         config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
     }
     else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
@@ -386,13 +386,13 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'A' && cmd[1] == 'C' && cmd[2] == 'C' && cmd[3] == 'E' && cmd[4] == 'L' && cmd[5] == '=') {
         int32_t val = 0; const char *p = cmd + 6;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 10 && val <= 100000) accel_limit = val;
+        if (val >= 100 && val <= 500000) accel_limit = val;
         config_mark_dirty(); uart_puts("OK ACCEL="); uart_putint(accel_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'J' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'K' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 100 && val <= 1000000) jerk_limit = val;
+        if (val >= 1000 && val <= 10000000) jerk_limit = val;
         config_mark_dirty(); uart_puts("OK JERK="); uart_putint(jerk_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'O' && cmd[1] == 'N') {
@@ -453,7 +453,7 @@ static void parse_command(const char *cmd) {
             while (*p >= '0' && *p <= '9') { pos = pos * 10 + (*p - '0'); p++; }
             pos *= sign;
         }
-        if (speed > 0 && speed <= 10000) max_vel = speed;
+        if (speed > 0 && speed <= 50000) max_vel = speed;
         target_pos = pos; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
         uart_puts("OK m:"); uart_putint(speed); uart_puts(":"); uart_putint(target_pos); uart_puts("\r\n");
     }
