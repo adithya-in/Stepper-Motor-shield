@@ -259,7 +259,21 @@ sm_vel += sm_acc * dt
 | Encoder counts/rev (4× QEI) | 16384 |
 | Position resolution | 360° / 16384 = 0.022° per count |
 
+## Non-Volatile Config
+
+All tuning parameters (Kp, Ki, Kd, max_vel, accel_limit, jerk_limit, tolerance,
+fault_thr, profile, coil_current, microstep) are automatically saved to flash
+when changed. These persist across power cycles and are loaded at boot.
+
+- **Flash address**: last page of 512KB (0x1D07F000)
+- **Save strategy**: 100ms debounce after last parameter change
+- **Integrity**: magic word + XOR checksum validated on load
+- **Defaults**: used if flash is blank or corrupted
+
 ## Releases
+
+- **v5.1.1** — NVM flash config: all parameters persist across power cycles
+- **v5.1.0** — Phase 1 commands: colon-separated opcode format, Kd, configurable telemetry
 
 - **v5.1.0** — Phase 1 commands: colon-separated opcode format, Kd derivative term, configurable telemetry, coil current & microstep storage
 - **v5.0.1** — Trapezoidal profile selectable via PROFILE=S/T, dashboard toggle

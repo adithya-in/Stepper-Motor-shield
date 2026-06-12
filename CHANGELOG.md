@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.1.1 — 2026-06-12
+
+Non-volatile flash storage: all settings persist across power cycles.
+
+### Added
+- **NVM flash config** — parameters saved to last flash page (PIC32MK self-write)
+  - `config_save()` — page erase + word-by-word program via NVM controller
+  - `config_load()` — reads at boot, validates magic + checksum
+  - `config_mark_dirty()` — 100ms debounce before flash write
+- Parameters persisted: Kp, Ki, Kd, max_vel, tolerance, fault_thr, accel_limit, jerk_limit, profile, coil_current, microstep
+
+### Legacy
+- All commands, dashboard, UART stream unchanged
+
 ## v5.1.0 — 2026-06-12
 
 Phase 1 command protocol: colon-separated opcode format, with backward-compatible legacy
