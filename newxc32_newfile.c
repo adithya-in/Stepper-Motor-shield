@@ -474,12 +474,15 @@ static void parse_command(const char *cmd) {
     // ── Queue commands ──
     else if (cmd[0] == 'Q' && cmd[1] == '=') {
         int32_t val = 0; uint8_t n = 0; const char *p = cmd + 2;
-        while (*p >= '0' || *p == '-') {
+        while (1) {
+            while (*p == ' ' || *p == '\t') p++;
+            if (!((*p >= '0' && *p <= '9') || *p == '-')) break;
             int32_t sign = 1;
             if (*p == '-') { sign = -1; p++; }
             val = 0;
             while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
             if (n < QUEUE_MAX) queue[n++] = val * sign;
+            while (*p == ' ' || *p == '\t') p++;
             if (*p == ',') p++;
             else break;
         }
@@ -581,12 +584,15 @@ static void parse_command(const char *cmd) {
     }
     else if (cmd[0] == 'q' && cmd[1] == ':') {
         int32_t val = 0; uint8_t n = 0; const char *p = cmd + 2;
-        while (*p >= '0' || *p == '-') {
+        while (1) {
+            while (*p == ' ' || *p == '\t') p++;
+            if (!((*p >= '0' && *p <= '9') || *p == '-')) break;
             int32_t sign = 1;
             if (*p == '-') { sign = -1; p++; }
             val = 0;
             while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
             if (n < QUEUE_MAX) queue[n++] = val * sign;
+            while (*p == ' ' || *p == '\t') p++;
             if (*p == ':') p++;
             else break;
         }

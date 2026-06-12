@@ -83,8 +83,9 @@ function disconnectSerial() {
 function parseLine(line) {
   if (!line || line.startsWith('=') || line.startsWith('ERR')) return null;
   const result = {};
-  // Status line: P:<pos>,E:<err>,V:<vel>,T:<target>,F:<fault>,M:<moving>,A:<at_target>
-  const m = /P:(-?\d+),E:(-?\d+),V:(-?\d+),T:(-?\d+),F:(\d+),M:(\d+),A:(\d+),Q:(\d+),QL:(\d+)/.exec(line);
+  // Status line: P:<pos>,E:<err>,V:<vel>,T:<target>,F:<fault>,M:<moving>,A:<at_target>,Q:<qidx>,QL:<qlen>
+  // Q/QL optional for backward compatibility with pre-v5.2.0 firmware
+  const m = /P:(-?\d+),E:(-?\d+),V:(-?\d+),T:(-?\d+),F:(\d+),M:(\d+),A:(\d+)(?:,Q:(\d+),QL:(\d+))?/.exec(line);
   if (m) {
     result.position = parseInt(m[1], 10);
     result.error = parseInt(m[2], 10);
@@ -93,8 +94,8 @@ function parseLine(line) {
     result.fault = m[5] === '1';
     result.moving = m[6] === '1';
     result.atTarget = m[7] === '1';
-    result.qidx = parseInt(m[8], 10);
-    result.qlen = parseInt(m[9], 10);
+    if (m[8] !== undefined) result.qidx = parseInt(m[8], 10);
+    if (m[9] !== undefined) result.qlen = parseInt(m[9], 10);
     return Object.keys(result).length ? result : null;
   }
   // GET response: T=...,PROFILE=S/T,ACCEL=,JERK=,MAXV=,KD=,I=,US= etc.
