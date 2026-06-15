@@ -415,12 +415,7 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
     int32_t pid_trim = (Kp * error + Ki * integral + Kd * derivative) / 100;
 
     // ── Combined target velocity ──
-    int32_t raw_vel;
-    if (abs_err <= (uint32_t)tolerance) {
-        raw_vel = pid_trim;
-    } else {
-        raw_vel = profile_vel;
-    }
+    int32_t raw_vel = profile_vel + pid_trim;
     if (raw_vel > max_vel) raw_vel = max_vel;
     if (raw_vel < -max_vel) raw_vel = -max_vel;
 
@@ -510,7 +505,7 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 100000) max_vel = val;
+        if (val > 0 && val <= 50000) max_vel = val;
         config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
     }
     else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
@@ -659,7 +654,7 @@ static void parse_command(const char *cmd) {
             pos *= sign;
         }
         queue_active = 0; queue_len = 0; queue_idx = 0;
-        if (speed > 0 && speed <= 100000) max_vel = speed;
+        if (speed > 0 && speed <= 50000) max_vel = speed;
         target_pos = pos; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
         uart_puts("OK m:"); uart_putint(speed); uart_puts(":"); uart_putint(target_pos); uart_puts("\r\n");
     }
