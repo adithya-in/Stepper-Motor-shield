@@ -169,10 +169,10 @@ ws.onmessage = (event) => {
         els.btnProfileS.classList.remove('active');
       }
     }
-    if (data.accel !== undefined && document.activeElement !== els.accelInput) els.accelInput.value = data.accel;
-    if (data.jerk !== undefined && document.activeElement !== els.jerkInput) els.jerkInput.value = data.jerk;
-    if (data.maxv !== undefined && document.activeElement !== els.maxvInput) els.maxvInput.value = data.maxv;
-    if (data.dwell !== undefined && document.activeElement !== els.dwellInput) els.dwellInput.value = data.dwell;
+    if (data.accel !== undefined && document.activeElement !== els.accelInput && !isPending('accel')) els.accelInput.value = data.accel;
+    if (data.jerk !== undefined && document.activeElement !== els.jerkInput && !isPending('jerk')) els.jerkInput.value = data.jerk;
+    if (data.maxv !== undefined && document.activeElement !== els.maxvInput && !isPending('maxv')) els.maxvInput.value = data.maxv;
+    if (data.dwell !== undefined && document.activeElement !== els.dwellInput && !isPending('dwell')) els.dwellInput.value = data.dwell;
     if (data.qlen !== undefined && data.qidx !== undefined) {
       if (data.qlen > 0) {
         els.queueStatus.textContent = `${data.qidx} / ${data.qlen}`;
@@ -226,7 +226,15 @@ ws.onmessage = (event) => {
 ws.onopen = () => setTimeout(() => sendCmd('GET'), 300);
 ws.onclose = () => updateConnection({ connected: false, port: null });
 
-function sendCmd(cmd) { ws.send(JSON.stringify({ command: cmd })); }
+const pendingFields = {};
+function sendCmd(cmd) {
+  ws.send(JSON.stringify({ command: cmd }));
+  const m = cmd.match(/^(\w+)=/);
+  if (m) pendingFields[m[1].toLowerCase()] = Date.now();
+}
+function isPending(field) {
+  return (Date.now() - (pendingFields[field] || 0)) < 600;
+}
 
 // ── Motor Test Controls ──
 els.btnOn = document.getElementById('btn-on');

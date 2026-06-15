@@ -505,20 +505,20 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 100000) max_vel = val;
-        config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
+        if (val > 0 && val <= 100000) { max_vel = val; config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n"); }
+        else { uart_puts("ERR RANGE\r\n"); }
     }
     else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
         int32_t val = 0; const char *p = cmd + 4;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 0 && val <= 1000) tolerance = val;
-        config_mark_dirty(); uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n");
+        if (val >= 0 && val <= 1000) { tolerance = val; config_mark_dirty(); uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n"); }
+        else { uart_puts("ERR RANGE\r\n"); }
     }
     else if (cmd[0] == 'F' && cmd[1] == 'T' && cmd[2] == '=') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 100000) fault_thr = val;
-        config_mark_dirty(); uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n");
+        if (val > 0 && val <= 100000) { fault_thr = val; config_mark_dirty(); uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n"); }
+        else { uart_puts("ERR RANGE\r\n"); }
     }
     else if (cmd[0] == 'A' && cmd[1] == 'C' && cmd[2] == 'C' && cmd[3] == 'E' && cmd[4] == 'L' && cmd[5] == '=') {
         int32_t val = 0; const char *p = cmd + 6;

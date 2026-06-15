@@ -107,15 +107,15 @@
         <input type="range" id="kd-slider" min="0" max="500" value="0" class="pid-slider">
       </div>
       <div class="pid-row">
-        <label>MaxV: <input type="number" id="maxv-input" value="5000" min="10" max="100000" class="pid-num"></label>
+        <label>MaxV: <input type="number" id="maxv-input" value="5000" min="10" max="100000" class="pid-num"> steps/s</label>
         <button id="btn-maxv" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
-        <label>ACCEL: <input type="number" id="accel-input" value="50000" min="100" max="5000000" class="pid-num"></label>
+        <label>ACCEL: <input type="number" id="accel-input" value="50000" min="100" max="5000000" class="pid-num"> steps/s²</label>
         <button id="btn-accel" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
-        <label>JERK: <input type="number" id="jerk-input" value="500000" min="1000" max="10000000" class="pid-num"></label>
+        <label>JERK: <input type="number" id="jerk-input" value="500000" min="1000" max="10000000" class="pid-num"> steps/s³</label>
         <button id="btn-jerk" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
@@ -130,11 +130,11 @@
         <span id="tune-status" class="tune-status">Idle</span>
       </div>
       <div class="pid-row">
-        <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"></label>
+        <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"> counts</label>
         <button id="btn-tol" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
-        <label>Fault Threshold: <input type="number" id="ft-input" value="500" min="1" max="100000" class="pid-num"></label>
+        <label>Fault Threshold: <input type="number" id="ft-input" value="500" min="1" max="100000" class="pid-num"> counts</label>
         <button id="btn-ft" class="btn btn-small">Set</button>
       </div>
       <div class="pid-row">
