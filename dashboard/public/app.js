@@ -169,10 +169,10 @@ ws.onmessage = (event) => {
         els.btnProfileS.classList.remove('active');
       }
     }
-    if (data.accel !== undefined && document.activeElement !== els.accelInput && !isPending('accel')) els.accelInput.value = data.accel;
-    if (data.jerk !== undefined && document.activeElement !== els.jerkInput && !isPending('jerk')) els.jerkInput.value = data.jerk;
-    if (data.maxv !== undefined && document.activeElement !== els.maxvInput && !isPending('maxv')) els.maxvInput.value = data.maxv;
-    if (data.dwell !== undefined && document.activeElement !== els.dwellInput && !isPending('dwell')) els.dwellInput.value = data.dwell;
+    if (data.accel !== undefined && document.activeElement !== els.accelInput && !isPending(els.accelInput)) els.accelInput.value = data.accel;
+    if (data.jerk !== undefined && document.activeElement !== els.jerkInput && !isPending(els.jerkInput)) els.jerkInput.value = data.jerk;
+    if (data.maxv !== undefined && document.activeElement !== els.maxvInput && !isPending(els.maxvInput)) els.maxvInput.value = data.maxv;
+    if (data.dwell !== undefined && document.activeElement !== els.dwellInput && !isPending(els.dwellInput)) els.dwellInput.value = data.dwell;
     if (data.qlen !== undefined && data.qidx !== undefined) {
       if (data.qlen > 0) {
         els.queueStatus.textContent = `${data.qidx} / ${data.qlen}`;
@@ -227,13 +227,12 @@ ws.onopen = () => setTimeout(() => sendCmd('GET'), 300);
 ws.onclose = () => updateConnection({ connected: false, port: null });
 
 const pendingFields = {};
-function sendCmd(cmd) {
+function sendCmd(cmd, inputEl) {
   ws.send(JSON.stringify({ command: cmd }));
-  const m = cmd.match(/^(\w+)=/);
-  if (m) pendingFields[m[1].toLowerCase()] = Date.now();
+  if (inputEl) pendingFields[inputEl.id] = Date.now();
 }
-function isPending(field) {
-  return (Date.now() - (pendingFields[field] || 0)) < 600;
+function isPending(el) {
+  return (Date.now() - (pendingFields[el.id] || 0)) < 250;
 }
 
 // ── Motor Test Controls ──
@@ -309,17 +308,17 @@ els.btnTune.addEventListener('click', () => {
 
 els.btnMaxv.addEventListener('click', () => {
   const val = parseInt(els.maxvInput.value, 10);
-  if (!isNaN(val) && val > 0) sendCmd('MAXV=' + val);
+  if (!isNaN(val) && val > 0) { sendCmd('MAXV=' + val, els.maxvInput); }
 });
 
 els.btnTol.addEventListener('click', () => {
   const val = parseInt(els.tolInput.value, 10);
-  if (!isNaN(val) && val >= 0) sendCmd('TOL=' + val);
+  if (!isNaN(val) && val >= 0) { sendCmd('TOL=' + val, els.tolInput); }
 });
 
 els.btnFt.addEventListener('click', () => {
   const val = parseInt(els.ftInput.value, 10);
-  if (!isNaN(val) && val > 0) sendCmd('FT=' + val);
+  if (!isNaN(val) && val > 0) { sendCmd('FT=' + val, els.ftInput); }
 });
 
 // ── Profile Controls ──
@@ -344,18 +343,18 @@ els.btnProfileT.addEventListener('click', () => {
 
 els.btnAccel.addEventListener('click', () => {
   const val = parseInt(els.accelInput.value, 10);
-  if (!isNaN(val) && val >= 100) sendCmd('ACCEL=' + val);
+  if (!isNaN(val) && val >= 100) { sendCmd('ACCEL=' + val, els.accelInput); }
 });
 
 els.btnJerk.addEventListener('click', () => {
   const val = parseInt(els.jerkInput.value, 10);
-  if (!isNaN(val) && val >= 1000) sendCmd('JERK=' + val);
+  if (!isNaN(val) && val >= 1000) { sendCmd('JERK=' + val, els.jerkInput); }
 });
 
 // ── Queue Controls ──
 els.btnDwell.addEventListener('click', () => {
   const val = parseInt(els.dwellInput.value, 10);
-  if (!isNaN(val) && val >= 0) sendCmd('DWELL=' + val);
+  if (!isNaN(val) && val >= 0) { sendCmd('DWELL=' + val, els.dwellInput); }
 });
 
 els.btnQStart.addEventListener('click', () => {
