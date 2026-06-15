@@ -350,6 +350,7 @@ raw_vel = profile_vel + pid_trim
 
 | Tag | Date | Description |
 |-----|------|-------------|
+| **v6.0.0** | 2026-06-15 | **Phase 1 complete.** `docs/BUGS_AND_LESSONS.md` — full 24+ bug knowledge base. Dashboard activeElement input protection. |
 | **v5.2.0** | 2026-06-12 | Multi-point queue (Q=/q:), DWELL, QSTOP, dashboard queue card |
 | **v5.1.4** | 2026-06-12 | Dashboard UI ranges match firmware; ACCEL/JERK number inputs; accuracy ±1–3 counts |
 | **v5.1.3** | 2026-06-12 | Snappier defaults: MAXV=5000, ACCEL=50000, JERK=500000; ranges increased 5–10× |

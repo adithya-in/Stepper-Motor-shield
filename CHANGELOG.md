@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.0.0 — 2026-06-15
+
+Phase 1 complete. Comprehensive bug/troubleshooting documentation, activeElement input
+protection in dashboard, and full knowledge base capture for future builders.
+
+### Added
+- **`docs/BUGS_AND_LESSONS.md`** — complete catalogue of every bug encountered:
+  - 24+ bugs documented with root cause, fix, prevention, and file references
+  - Covers firmware bugs (Timer3 vector, global interrupts, ENA polarity, OERR lockup,
+    PPS pins, fault triggering, motor disable, state reset, etc.)
+  - Build/flash issues (MDB CLI failure, PKoB4 VCOM enumeration, clean build)
+  - Dashboard issues (browser cache, activeElement overwrite, queue input spaces)
+  - Electrical issues (TB6600 DIP switches, encoder wiring, magnet coupling)
+  - NVM issues (magic/checksum, flash debounce)
+  - Top 5 most painful bugs ranked by hours lost
+
+### Changed
+- **Dashboard input fields** protected from telemetry overwrite:
+  - `document.activeElement` check on ACCEL, JERK, MAXV, DWELL fields
+  - Users can type without values being overwritten mid-edit
+- **README** updated to reflect Phase 1 completion, release table extended
+
+### Bug Fixes
+- **Dashboard: telemetry overwrites input fields during typing** — added
+  `document.activeElement` guard in `app.js` for accel, jerk, maxv, dwell inputs
+- **Browser cache stale UI** — documented hard refresh requirement; recommend
+  `Cache-Control: no-store` in server.js
+
 ## v5.3.0 — 2026-06-15
 
 Auto-tune PID tuning: relay-based Ziegler-Nichols with bang-bang oscillation, integrated into

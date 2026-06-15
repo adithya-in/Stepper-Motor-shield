@@ -169,10 +169,10 @@ ws.onmessage = (event) => {
         els.btnProfileS.classList.remove('active');
       }
     }
-    if (data.accel !== undefined) els.accelInput.value = data.accel;
-    if (data.jerk !== undefined) els.jerkInput.value = data.jerk;
-    if (data.maxv !== undefined) els.maxvInput.value = data.maxv;
-    if (data.dwell !== undefined) els.dwellInput.value = data.dwell;
+    if (data.accel !== undefined && document.activeElement !== els.accelInput) els.accelInput.value = data.accel;
+    if (data.jerk !== undefined && document.activeElement !== els.jerkInput) els.jerkInput.value = data.jerk;
+    if (data.maxv !== undefined && document.activeElement !== els.maxvInput) els.maxvInput.value = data.maxv;
+    if (data.dwell !== undefined && document.activeElement !== els.dwellInput) els.dwellInput.value = data.dwell;
     if (data.qlen !== undefined && data.qidx !== undefined) {
       if (data.qlen > 0) {
         els.queueStatus.textContent = `${data.qidx} / ${data.qlen}`;
