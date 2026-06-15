@@ -86,7 +86,7 @@ static inline uint32_t core_ticks(void);
 // ── NVM Config (non-volatile flash storage) ──
 #define CONFIG_ADDR   0x1D07F000
 #define CONFIG_MAGIC  0xBEADC0DE
-#define CONFIG_DATA_WORDS 12
+#define CONFIG_DATA_WORDS 11
 
 typedef struct {
     int32_t  Kp, Ki, Kd;
