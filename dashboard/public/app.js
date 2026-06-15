@@ -229,10 +229,13 @@ ws.onclose = () => updateConnection({ connected: false, port: null });
 const pendingFields = {};
 function sendCmd(cmd, inputEl) {
   ws.send(JSON.stringify({ command: cmd }));
-  if (inputEl) pendingFields[inputEl.id] = Date.now();
+  if (inputEl) {
+    pendingFields[inputEl.id] = Date.now();
+    setTimeout(() => sendCmd('GET'), 200);
+  }
 }
 function isPending(el) {
-  return (Date.now() - (pendingFields[el.id] || 0)) < 250;
+  return (Date.now() - (pendingFields[el.id] || 0)) < 300;
 }
 
 // ── Motor Test Controls ──
