@@ -48,6 +48,30 @@ static uint32_t tlm_period = 100;   // ms
 static uint8_t tlm_enabled = 1;
 static uint32_t tlm_ticks = (PB_CLOCK * 100) / 1000;
 
+// ── Auto-tune ──
+#define TUNE_IDLE      0
+#define TUNE_MOVE      1
+#define TUNE_RELAY     2
+#define TUNE_COMPLETE  3
+
+static uint8_t tune_state = TUNE_IDLE;
+static int32_t tune_setpoint = 0;
+static int32_t tune_offset = 3000;
+static int32_t tune_relay_vel = 3000;
+static int32_t tune_hyst = 10;
+static uint8_t tune_min_cycles = 4;
+static uint8_t tune_dir = 0;
+static int32_t tune_peak_max = 0;
+static int32_t tune_peak_min = 0;
+static int32_t tune_peak_max_sum = 0;
+static int32_t tune_peak_min_sum = 0;
+static uint8_t tune_full_cycles = 0;
+static uint32_t tune_cycle_start = 0;
+static uint32_t tune_period_sum = 0;
+static uint8_t tune_output = 0;
+static int32_t tune_amplitude = 0;
+static uint32_t tune_period_ms = 0;
+
 // ── Multi-point queue ──
 #define QUEUE_MAX 32
 static int32_t queue[QUEUE_MAX];
@@ -249,13 +273,91 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
 
     if (open_loop) return;
 
-    // ── S-curve position mode ──
     int32_t actual = encoder_read();
+
+    // ── Auto-tune relay override ──
+    if (tune_state == TUNE_RELAY) {
+        int32_t err = actual - tune_setpoint;
+        uint8_t nd;
+        if (err > tune_hyst) nd = 0;
+        else if (err < -tune_hyst) nd = 1;
+        else nd = tune_dir;
+
+        // Peak/period on direction change
+        if (nd != tune_dir) {
+            uint32_t now = core_ticks();
+            uint32_t half = now - tune_cycle_start;
+            if (nd == 1) {
+                tune_peak_min_sum += tune_peak_min;
+                tune_peak_min = 0;
+            } else {
+                tune_peak_max_sum += tune_peak_max;
+                tune_peak_max = 0;
+                tune_full_cycles++;
+            }
+            if (tune_full_cycles > 0)
+                tune_period_sum += half;
+            tune_cycle_start = now;
+
+            if (tune_full_cycles >= tune_min_cycles) {
+                int32_t amp = (tune_peak_max_sum + tune_peak_min_sum) / (2 * tune_full_cycles);
+                if (amp < 1) amp = 1;
+                tune_amplitude = amp;
+                float Tu = (float)(tune_period_sum / tune_full_cycles) * 2.0f / 4000.0f;
+                tune_period_ms = (uint32_t)(Tu * 1000.0f);
+                float Ku = 4.0f * tune_relay_vel / (3.14159265f * amp);
+                Kp = (int32_t)(0.6f * Ku * 100.0f);
+                Ki = (int32_t)(1.2f * Ku * 100.0f / (Tu * CONTROL_FREQ));
+                Kd = (int32_t)(0.075f * Ku * Tu * CONTROL_FREQ * 100.0f);
+                if (Kp < 0) Kp = 0; if (Kp > 10000) Kp = 10000;
+                if (Ki < 0) Ki = 0; if (Ki > 1000) Ki = 1000;
+                if (Kd < 0) Kd = 0; if (Kd > 10000) Kd = 10000;
+                tune_state = TUNE_COMPLETE;
+                tune_output = 0;
+            }
+        }
+
+        if (nd == 1 && err > tune_peak_max) tune_peak_max = err;
+        if (nd == 0 && (-err) > tune_peak_min) tune_peak_min = -err;
+
+        current_vel = nd ? tune_relay_vel : -tune_relay_vel;
+        DIR_PIN = (current_vel >= 0) ? DIR_CW : DIR_CCW;
+        motor_set_speed(tune_relay_vel);
+        moving = 1; at_target = 0; ENA_PIN = ENA_ON;
+        tune_dir = nd;
+        return;
+    }
+
+    if (tune_state == TUNE_COMPLETE) {
+        if (!tune_output) {
+            tune_output = 1;
+            uart_puts("OK TUNE:Kp="); uart_putint(Kp);
+            uart_puts(",Ki="); uart_putint(Ki);
+            uart_puts(",Kd="); uart_putint(Kd);
+            uart_puts(",amp="); uart_putint(tune_amplitude);
+            uart_puts(",Tu="); uart_putint(tune_period_ms);
+            uart_puts("\r\n");
+            config_mark_dirty();
+            target_pos = tune_setpoint;
+        }
+    }
+
+    // ── S-curve position mode ──
     int32_t error = target_pos - actual;
     follow_err = error;
 
     if (error < tolerance && error > -tolerance) {
         if (moving) { moving = 0; at_target = 1; motor_set_speed(0); }
+        // ── TUNE_MOVE completion (motor just arrived at offset target) ──
+        if (tune_state == TUNE_MOVE) {
+            tune_state = TUNE_RELAY;
+            tune_cycle_start = core_ticks();
+            tune_dir = 1;
+            tune_peak_max = 0; tune_peak_min = 0;
+            tune_peak_max_sum = 0; tune_peak_min_sum = 0;
+            tune_full_cycles = 0; tune_period_sum = 0;
+            target_pos = tune_setpoint;
+        }
         current_vel = 0; sm_vel = 0; sm_acc = 0; vfrac = 0; fault_cnt = 0; integral = 0; prev_error = 0;
         if (queue_active) {
             if (queue_idx < queue_len - 1) {
@@ -271,6 +373,11 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
             }
         }
         return;
+    }
+
+    // ── Derivative kick fix: on first frame of a new move, zero derivative ──
+    if (!moving) {
+        prev_error = error;
     }
 
     // Fault only when at target (something pushed motor out of position)
@@ -390,6 +497,11 @@ static void parse_command(const char *cmd) {
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
         Ki = val; config_mark_dirty(); uart_puts("OK KI="); uart_putint(Ki); uart_puts("\r\n");
     }
+    else if (cmd[0] == 'K' && cmd[1] == 'D' && cmd[2] == '=') {
+        int32_t val = 0; const char *p = cmd + 3;
+        while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
+        Kd = val; prev_error = 0; config_mark_dirty(); uart_puts("OK KD="); uart_putint(Kd); uart_puts("\r\n");
+    }
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
@@ -449,6 +561,33 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'Z' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'O') {
         encoder_offset = -(int32_t)POS1CNT;
         uart_puts("OK ZERO\r\n");
+    }
+    else if (cmd[0] == 'T' && cmd[1] == 'U' && cmd[2] == 'N' && cmd[3] == 'E') {
+        int32_t off = tune_offset, vel = tune_relay_vel, hys = tune_hyst;
+        const char *p = cmd + 4;
+        if (*p == ':') {
+            p++; off = 0;
+            while (*p >= '0' && *p <= '9') { off = off * 10 + (*p - '0'); p++; }
+            if (*p == ':') {
+                p++; vel = 0;
+                while (*p >= '0' && *p <= '9') { vel = vel * 10 + (*p - '0'); p++; }
+                if (*p == ':') {
+                    p++; hys = 0;
+                    while (*p >= '0' && *p <= '9') { hys = hys * 10 + (*p - '0'); p++; }
+                }
+            }
+        }
+        if (off < 100) off = 3000;
+        if (vel < 100) vel = 3000;
+        if (hys < 1) hys = 10;
+        tune_offset = off; tune_relay_vel = vel; tune_hyst = hys;
+        tune_setpoint = encoder_read();
+        tune_state = TUNE_MOVE;
+        tune_output = 0;
+        target_pos = tune_setpoint + tune_offset;
+        fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
+        queue_active = 0; queue_len = 0; queue_idx = 0;
+        uart_puts("OK TUNE START\r\n");
     }
     else if (cmd[0] == 'G' && cmd[1] == 'E' && cmd[2] == 'T') {
         uart_puts("T="); uart_putint(target_pos);
@@ -642,6 +781,7 @@ static void send_status(void) {
     uart_puts(",A:"); uart_putint(at_target ? 1 : 0);
     uart_puts(",Q:"); uart_putint(queue_active ? queue_idx + 1 : 0);
     uart_puts(",QL:"); uart_putint(queue_len);
+    uart_puts(",TS:"); uart_putint(tune_state);
     uart_puts("\r\n");
 }
 
@@ -659,6 +799,7 @@ int main(void) {
     uart_puts("ON OFF CW CCW SPEED=<n>\r\n");
     uart_puts("m:<speed>:<pos> en:1/0 z i:<mA> us:<n>\r\n");
     uart_puts("pid:<kp>:<ki>:<kd> tlm:1:<ms> tlm:0 st?\r\n");
+    uart_puts("TUNE[:<offset>:<vel>:<hyst>] auto-tune\r\n");
 
     uint32_t last_status = core_ticks();
     for (;;) {

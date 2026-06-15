@@ -127,6 +127,9 @@ main {
 .pid-slider { flex: 1; accent-color: var(--blue); height: 6px; cursor: pointer; }
 .pid-num { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.25rem 0.4rem; border-radius: 6px; width: 80px; font-size: 0.85rem; text-align: center; }
 .pid-num:focus { border-color: var(--blue); outline: none; }
+.tune-status { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.tune-status.active { color: var(--orange); }
+.tune-status.done { color: var(--green); }
 
 /* Queue */
 .queue-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }

@@ -48,6 +48,7 @@
         <tr><td>Fault</td><td id="status-fault">No</td></tr>
         <tr><td>Moving</td><td id="status-moving">No</td></tr>
         <tr><td>At Target</td><td id="status-atarget">Yes</td></tr>
+        <tr><td>Tune</td><td id="status-tune">Idle</td></tr>
       </table>
     </section>
 
@@ -99,6 +100,10 @@
         <input type="range" id="ki-slider" min="0" max="100" value="5" class="pid-slider">
       </div>
       <div class="pid-row">
+        <label>Kd: <span id="kd-label">0</span></label>
+        <input type="range" id="kd-slider" min="0" max="500" value="0" class="pid-slider">
+      </div>
+      <div class="pid-row">
         <label>MaxV: <input type="number" id="maxv-input" value="5000" min="10" max="50000" class="pid-num"></label>
         <button id="btn-maxv" class="btn btn-small">Set</button>
       </div>
@@ -116,6 +121,10 @@
           <button id="btn-profile-s" class="btn btn-small active">S-curve</button>
           <button id="btn-profile-t" class="btn btn-small">Trapezoidal</button>
         </span>
+      </div>
+      <div class="pid-row">
+        <button id="btn-tune" class="btn btn-primary">Auto-Tune</button>
+        <span id="tune-status" class="tune-status">Idle</span>
       </div>
       <div class="pid-row">
         <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"></label>

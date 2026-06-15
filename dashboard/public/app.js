@@ -29,8 +29,10 @@ const els = {
   btnClear: document.getElementById('btn-clear'),
   kpSlider: document.getElementById('kp-slider'),
   kiSlider: document.getElementById('ki-slider'),
+  kdSlider: document.getElementById('kd-slider'),
   kpLabel: document.getElementById('kp-label'),
   kiLabel: document.getElementById('ki-label'),
+  kdLabel: document.getElementById('kd-label'),
   maxvInput: document.getElementById('maxv-input'),
   tolInput: document.getElementById('tol-input'),
   ftInput: document.getElementById('ft-input'),
@@ -43,6 +45,9 @@ const els = {
   btnQStart: document.getElementById('btn-q-start'),
   btnQStop: document.getElementById('btn-q-stop'),
   queueStatus: document.getElementById('queue-status'),
+  btnTune: document.getElementById('btn-tune'),
+  tuneStatus: document.getElementById('tune-status'),
+  statusTune: document.getElementById('status-tune'),
 };
 
 let selectedPort = null;
@@ -175,6 +180,45 @@ ws.onmessage = (event) => {
         els.queueStatus.textContent = 'Idle';
       }
     }
+    if (data.kp !== undefined) els.kpSlider.value = data.kp;
+    if (data.ki !== undefined) els.kiSlider.value = data.ki;
+    if (data.kd !== undefined) {
+      els.kdSlider.value = data.kd;
+      els.kdLabel.textContent = data.kd;
+    }
+    // Tune state from telemetry
+    if (data.tuneState !== undefined) {
+      const states = ['Idle', 'Moving', 'Relay', 'Complete'];
+      const label = states[data.tuneState] || '?';
+      els.statusTune.textContent = label;
+      if (data.tuneState === 2) {
+        els.tuneStatus.textContent = 'Tuning...';
+        els.tuneStatus.className = 'tune-status active';
+      } else if (data.tuneState === 3) {
+        els.tuneStatus.textContent = 'Complete';
+        els.tuneStatus.className = 'tune-status done';
+      } else if (data.tuneState === 0) {
+        if (els.tuneStatus.textContent !== 'Idle' && !els.tuneStatus.textContent.includes('Error')) {
+          els.tuneStatus.textContent = 'Idle';
+          els.tuneStatus.className = 'tune-status';
+        }
+      }
+    }
+    // Tune event from OK TUNE response
+    if (data.tuneEvent === 'start') {
+      els.tuneStatus.textContent = 'Moving...';
+      els.tuneStatus.className = 'tune-status active';
+      els.statusTune.textContent = 'Moving';
+    }
+    if (data.tuneEvent === 'complete') {
+      els.kpSlider.value = data.kp;
+      els.kiSlider.value = data.ki;
+      els.kdSlider.value = data.kd;
+      els.kdLabel.textContent = data.kd;
+      els.tuneStatus.textContent = `Done (amp=${data.tuneAmp}, Tu=${data.tunePeriod}ms)`;
+      els.tuneStatus.className = 'tune-status done';
+      els.statusTune.textContent = 'Complete';
+    }
     updateTimestamp();
   } catch (e) {}
 };
@@ -236,6 +280,23 @@ els.kiSlider.addEventListener('input', () => {
 els.kiSlider.addEventListener('change', () => {
   const val = parseInt(els.kiSlider.value, 10);
   sendCmd('KI=' + val);
+});
+
+els.kdSlider.addEventListener('input', () => {
+  const val = parseInt(els.kdSlider.value, 10);
+  els.kdLabel.textContent = val;
+});
+
+els.kdSlider.addEventListener('change', () => {
+  const val = parseInt(els.kdSlider.value, 10);
+  sendCmd('KD=' + val);
+});
+
+els.btnTune.addEventListener('click', () => {
+  sendCmd('TUNE');
+  els.tuneStatus.textContent = 'Waiting...';
+  els.tuneStatus.className = 'tune-status active';
+  els.statusTune.textContent = 'Starting';
 });
 
 els.btnMaxv.addEventListener('click', () => {

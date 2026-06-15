@@ -1,5 +1,27 @@
 # Changelog
 
+## v5.3.0 — 2026-06-15
+
+Auto-tune PID tuning: relay-based Ziegler-Nichols with bang-bang oscillation, integrated into
+1 kHz ISR, dashboard UI, and server bridge.
+
+### Added
+- **`TUNE`** — start auto-tune relay with `:<offset>:<vel>:<hyst>` optional params
+- **Auto-tune state machine** in control ISR:
+  - `TUNE_IDLE` → `TUNE_MOVE` (move to offset) → `TUNE_RELAY` (bang-bang oscillation) → `TUNE_COMPLETE`
+  - Relay control: hysteresis-based switching with peak/period tracking
+  - Minimum 4 cycles for reliable measurement
+  - ZN-PID computation on completion: `OK TUNE:Kp=...,Ki=...,Kd=...,amp=...,Tu=...`
+- **`KD=<n>`** — set derivative gain directly
+- **`TS:<state>`** — tune state in telemetry stream (0=IDLE, 1=MOVE, 2=RELAY, 3=COMPLETE)
+- **Derivative kick fix** — `prev_error` reset on first frame of a new move
+- **Dashboard**: Kd slider, Auto-Tune button with live status display (Idle/Moving/Relay/Complete)
+- **server.js**: parses `OK TUNE:`, `TS:`, `KD=`, `KP=`, `KI=` from serial
+
+### Changed
+- Help banner updated with `TUNE` and `KD=` entries
+- Dashboard tune status telemetry parsed from both `TS:` field and `OK TUNE:` event
+
 ## v5.2.0 — 2026-06-12
 
 Multi-point queue with configurable dwell delay.
