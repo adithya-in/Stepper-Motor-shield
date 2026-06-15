@@ -15,7 +15,9 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 let serial = null;
-let latestData = { rpm: 0, direction: 'STOPPED', on: false, connected: false, port: null, baud: DEFAULT_BAUD };
+// Holds the last value for each field so reconnecting clients get current state.
+// Broadcasts send only the fields that actually changed (never stale config fields on telemetry).
+let latestData = { connected: false, port: null, baud: DEFAULT_BAUD };
 
 function broadcast(data) {
   const msg = JSON.stringify(data);
@@ -42,11 +44,13 @@ app.post('/api/connect', (req, res) => {
   const baudRate = parseInt(baud, 10) || DEFAULT_BAUD;
   serial = new SerialPort({ path: portPath, baudRate, autoOpen: true });
   let buffer = '';
+  let responded = false;
 
   serial.on('open', () => {
     console.log(`Connected: ${portPath} @ ${baudRate} baud`);
+    if (!responded) { responded = true; res.json({ ok: true }); }
     latestData.connected = true; latestData.port = portPath; latestData.baud = baudRate;
-    broadcast(latestData); res.json({ ok: true });
+    broadcast({ connected: true, port: portPath, baud: baudRate });
   });
 
   serial.on('data', chunk => {
@@ -56,28 +60,30 @@ app.post('/api/connect', (req, res) => {
     for (const line of lines) {
       const parsed = parseLine(line.trim());
       if (parsed) {
+        parsed.connected = true;
         Object.assign(latestData, parsed);
-        latestData.connected = true;
-        broadcast(latestData);
+        broadcast(parsed);
       }
     }
   });
 
   serial.on('error', err => {
     console.error('Serial error:', err.message);
-    if (!res.headersSent) res.status(500).json({ error: err.message });
+    if (!responded) { responded = true; res.status(500).json({ error: err.message }); }
     disconnectSerial();
   });
 
   serial.on('close', () => disconnectSerial());
-  setTimeout(() => { if (!res.headersSent) res.status(500).json({ error: 'Connection timed out' }); }, 5000);
+  setTimeout(() => {
+    if (!responded) { responded = true; res.status(500).json({ error: 'Connection timed out' }); }
+  }, 5000);
 });
 
 app.post('/api/disconnect', (_req, res) => { disconnectSerial(); res.json({ ok: true }); });
 
 function disconnectSerial() {
   if (serial) { try { serial.close(); } catch (_) {} serial = null; }
-  latestData.connected = false; broadcast(latestData);
+  latestData.connected = false; broadcast({ connected: false });
 }
 
 function parseLine(line) {
@@ -99,7 +105,7 @@ function parseLine(line) {
     if (m[10] !== undefined) result.tuneState = parseInt(m[10], 10);
     return Object.keys(result).length ? result : null;
   }
-  // GET response: T=...,PROFILE=S/T,ACCEL=,JERK=,MAXV=,KD=,I=,US= etc.
+  // GET/OK response: T=...,PROFILE=S/T,ACCEL=,JERK=,MAXV=,KD=,I=,US= etc.
   const p = /PROFILE=([ST])/.exec(line);
   if (p) result.profile = p[1];
   const a = /ACCEL=(-?\d+)/.exec(line);

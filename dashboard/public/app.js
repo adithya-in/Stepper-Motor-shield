@@ -71,6 +71,7 @@ function updateBar(actual, target) {
   }
 }
 
+let gotConfig = false;
 function updateConnection(data) {
   connected = !!data.connected;
   if (connected) {
@@ -78,11 +79,13 @@ function updateConnection(data) {
     els.statusBadge.className = 'badge connected';
     els.connStatus.textContent = 'Connected';
     els.connStatus.style.color = 'var(--green)';
+    if (!gotConfig) { sendCmd('GET'); gotConfig = true; }
   } else {
     els.statusBadge.textContent = 'Disconnected';
     els.statusBadge.className = 'badge disconnected';
     els.connStatus.textContent = 'Disconnected';
     els.connStatus.style.color = 'var(--red)';
+    gotConfig = false;
   }
   if (data.port) els.portInfo.textContent = data.port;
   if (data.baud) els.baudInfo.textContent = data.baud + ' baud';
@@ -223,7 +226,6 @@ ws.onmessage = (event) => {
   } catch (e) {}
 };
 
-ws.onopen = () => setTimeout(() => sendCmd('GET'), 300);
 ws.onclose = () => updateConnection({ connected: false, port: null });
 
 const pendingFields = {};
@@ -231,7 +233,7 @@ function sendCmd(cmd, inputEl) {
   ws.send(JSON.stringify({ command: cmd }));
   if (inputEl) {
     pendingFields[inputEl.id] = Date.now();
-    setTimeout(() => sendCmd('GET'), 200);
+    setTimeout(() => sendCmd('GET'), 500);
   }
 }
 function isPending(el) {
