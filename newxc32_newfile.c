@@ -523,7 +523,7 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'A' && cmd[1] == 'C' && cmd[2] == 'C' && cmd[3] == 'E' && cmd[4] == 'L' && cmd[5] == '=') {
         int32_t val = 0; const char *p = cmd + 6;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 100 && val <= 500000) accel_limit = val;
+        if (val >= 100 && val <= 5000000) accel_limit = val;
         config_mark_dirty(); uart_puts("OK ACCEL="); uart_putint(accel_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'J' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'K' && cmd[4] == '=') {
