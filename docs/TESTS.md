@@ -153,11 +153,82 @@ Web-based control running on Node.js/Express with WebSocket:
 
 ---
 
+---
+
+## Phase 4: v6.1.0 — SPLL Clock, 115200 Baud, No Limits
+
+### Clock Migration (FRC → SPLL)
+
+The firmware was migrated from FRC (8 MHz) to SPLL (48 MHz) to enable reliable 115200 baud serial communication:
+
+| Parameter | v6.0.0 (FRC) | v6.1.0 (SPLL) |
+|---|---|---|
+| System clock | 8 MHz (FRC) | 48 MHz (PLLIDIV=2, PLLMULT=24, PLLODIV=2) |
+| PB clock | 4 MHz | 48 MHz |
+| Core timer | 4 MHz | 24 MHz |
+| Timer2 (step) | 500 kHz (TCKPS=3) | 6 MHz (TCKPS=3, same prescaler) |
+| UART baud | 19200 | 115200 (U1BRG=25, 0.16% error) |
+
+### All Clock-Dependent Formulas Updated
+
+Eight formulas were adjusted to match the new clock speeds:
+
+1. **`msleep()`**: `ms * 4000u` → `MS(ms)` (core timer 4 MHz → 24 MHz)
+2. **`motor_set_speed()`**: `500000 / sps` → `(PB_CLOCK / 8) / sps` (Timer2 500 kHz → 6 MHz)
+3. **Auto-tune Tu**: `/4000.0f` → `/ ((float)TICKS_PER_MS * 1000.0f)` (core timer)
+4. **Config save**: `PB_CLOCK / 10` → `MS(100)` (3× faster core timer)
+5. **`tlm_ticks`**: `(uint32_t)` cast added for overflow safety
+6. **`CONFIG_DATA_WORDS`**: 11 → 12 (struct padding fix for checksum)
+7. **Timer3 PR3**: auto-scaled by `PB_CLOCK / CONTROL_FREQ` (already formula-based)
+
+### Removed Command Limits
+
+All hard-coded upper bounds removed from firmware:
+
+| Parameter | Old limit | New limit |
+|---|---|---|
+| MAXV | ≤ 100,000 steps/s | Any positive value |
+| ACCEL | ≤ 5,000,000 steps/s² | ≥ 100 |
+| JERK | ≤ 10,000,000 steps/s³ | ≥ 1000 |
+| m: speed | ≤ 100,000 steps/s | Any positive value |
+
+### Belt Speed Example (G2 Pulley, 20 Teeth × 2 mm)
+
+Given `MAXV=190000`, `ACCEL=1800000`, `JERK=500000`:
+
+| Calculation | Value |
+|---|---|
+| Pulley circumference | 20 × 2 mm = **40 mm/rev** |
+| Steps per rev | 200 steps × 32 microsteps = **6400 steps/rev** |
+| Steps per mm | 6400 ÷ 40 = **160 steps/mm** |
+| **Belt speed at MAXV** | 190,000 ÷ 160 = **1,187.5 mm/s = 1.19 m/s** |
+| Accel in mm/s² | 1,800,000 ÷ 160 = **11,250 mm/s² ≈ 1.15 g** |
+| Motor RPM | 190,000 ÷ 6400 × 60 = **1,781 RPM** |
+
+### Dashboard Updates
+
+- Default baud: 115200 (server.js, app.js, index.html)
+- Telemetry toggle button (TLM ON/OFF)
+- GET response parsing: position, error, velocity, TOL, FT fields
+
+### Flash Script
+
+`flash.mdb` — MDB programming script for command-line flashing:
+
+```bash
+rm -rf ~/.mplabcomm
+/Applications/microchip/mplabx/v6.30/mplab_platform/bin/mdb.sh flash.mdb
+# Must power-cycle PKoB4 after flashing (VCOM gets stuck)
+```
+
+---
+
 ## File Reference
 
 | File | Description |
 |---|---|
-| `newxc32_newfile.c` | PIC32MK firmware: stepper + encoder + UART |
+| `newxc32_newfile.c` | PIC32MK firmware: stepper + encoder + UART (v6.1.0) |
+| `flash.mdb` | MDB command-line flash script |
 | `blink_test.c` | Minimal GPIO blink test |
 | `docs/PINOUT.md` | Wiring reference |
 | `tests/arduino/motor_test.ino` | Arduino validation test |
