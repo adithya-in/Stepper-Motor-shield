@@ -155,6 +155,24 @@ Web-based control running on Node.js/Express with WebSocket:
 
 ---
 
+## Motor Test Results — Coil Current Characterization
+
+Constant conditions: MAXV=200000, Accel=190000, Kp=10, Ki=5, Kd=0, 24V supply.
+
+| MAXV (steps/s) | Accel (steps/s²) | Kp | Ki | Kd | Voltage | Coil Current (A) | Idle Current (A) | Result |
+|---|---|---|---|---|---|---|---|---|
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 3.5–4 | 0.676 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 3–3.2 | 0.662 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 2.8–2.9 | 0.642 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 2.5–2.7 | 0.600 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 2–2.2 | 0.292 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 1.5–1.7 | 0.223 | Smooth with heating |
+| 200000 | 190000 | 10 | 5 | 0 | 24V | 1–1.2 | 0.112 | **Motor Stuck** |
+
+**Conclusion:** Minimum reliable coil current at 190000 steps/s and 24V is 1.5–1.7A. Below 1.5A the motor stalls. Above 2.5A there is noticeable heating but smooth operation.
+
+---
+
 ## Phase 4: v6.1.0 — SPLL Clock, 115200 Baud, No Limits
 
 ### Clock Migration (FRC → SPLL)
