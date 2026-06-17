@@ -15,3 +15,4 @@ dashboard/node_modules/
 blink_test.c
 defmplabxtrace.log*
 queuelogs/
+*.newfeatures

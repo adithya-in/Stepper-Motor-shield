@@ -44,7 +44,7 @@ Set DIP switches to match NEMA17 motor rated current and desired microstep resol
 | Switch | Setting | Effect |
 |---|---|---|
 | S1/S2/S3 | Per motor current | Match NEMA17 rating plate |
-| S4/S5/S6 | Per microstep | 1/16 = all ON (3200 steps/rev) |
+| S4/S5/S6 | Per microstep | 1/32 = S4 ON, S5 ON, S6 ON (6400 steps/rev) |
 
 ---
 

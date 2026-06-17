@@ -40,7 +40,7 @@ This is the opposite of common-cathode wiring and opposite of the typical TB6600
 **File:** `tests/arduino/motor_test.ino`
 
 Final test sequence (verified working at 10 kHz step rate):
-1. 16000 steps CW (~5 revs at 1/16 microstep = 3200 steps/rev), pause 2 s
+1. 16000 steps CW (~2.5 revs at 1/32 microstep = 6400 steps/rev), pause 2 s
 2. 16000 steps CCW, pause 2 s
 3. Loop forever
 

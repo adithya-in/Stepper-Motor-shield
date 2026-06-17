@@ -1,7 +1,7 @@
 # Stepper Motor Shield — PID Position Control + S-Curve
 
 PIC32MK0512MCJ064 firmware driving a NEMA17 stepper via TB6600 driver with AS5047U
-magnetic encoder feedback. Controlled over USB serial (19200 baud) or web dashboard.
+magnetic encoder feedback. Controlled over USB serial (115200 baud) or web dashboard.
 
 **Achieved accuracy: ±1–3 encoder counts = 0.022°–0.066°** (limited by encoder noise floor).
 
@@ -13,7 +13,7 @@ rm -rf ~/.mplabcomm
 /Applications/microchip/mplabx/v6.30/mplab_platform/bin/mdb.sh flash.mdb
 
 # Connect serial
-screen /dev/cu.usbmodemBUR2143200772 19200
+screen /dev/cu.usbmodemBUR2143200772 115200
 
 # Start dashboard
 cd dashboard && npm install && node server.js
@@ -44,9 +44,9 @@ so the dashboard and existing scripts continue working.
 | `CCW` | Set direction counter-clockwise | — |
 | `SPEED=<n>` | Set step rate for open-loop mode | 10–100000 |
 | **Motion Profile** | | |
-| `MAXV=<n>` | Max velocity | 1–50000 steps/s |
-| `ACCEL=<n>` | Max acceleration | 100–500000 steps/s² |
-| `JERK=<n>` | Max jerk (S-curve smoothness) | 1000–10000000 steps/s³ |
+| `MAXV=<n>` | Max velocity | ≥1 steps/s |
+| `ACCEL=<n>` | Max acceleration | ≥100 steps/s² |
+| `JERK=<n>` | Max jerk (S-curve smoothness) | ≥1000 steps/s³ |
 | `PROFILE=S` | S-curve — jerk-limited smooth transitions | — |
 | `PROFILE=T` | Trapezoidal — instant acceleration changes | — |
 | **PID Tuning** | | |
@@ -272,7 +272,7 @@ See [PINOUT.md](docs/PINOUT.md) for complete pin mapping.
 
 ### TB6600 DIP Switches
 - S1/S2/S3: per motor current rating
-- S4/S5/S6: all ON = 1/16 microstep (3200 steps/rev)
+- S4/S5/S6: S4 ON, S5 ON, S6 ON = 1/32 microstep (6400 steps/rev)
 
 ## Dashboard
 
@@ -300,7 +300,7 @@ dashboard/
 ### Architecture
 
 ```
-Firmware (PIC32MK) ←→ Serial (19200) ←→ server.js ←→ WebSocket ←→ browser
+Firmware (PIC32MK) ←→ Serial (115200) ←→ server.js ←→ WebSocket ←→ browser
 ```
 
 ## Firmware Architecture
@@ -310,7 +310,7 @@ Firmware (PIC32MK) ←→ Serial (19200) ←→ server.js ←→ WebSocket ←�
 | Position loop | Timer3 ISR | 1 kHz | Profile → PID trim → smoother → velocity |
 | Step generation | OC1 + Timer2 PWM | Variable | Hardware step pulses, 50% duty |
 | Encoder | QEI1 | Continuous | AS5047U ABI, 16384 counts/rev |
-| UART | UART1 | 19200 baud | Command + telemetry |
+| UART | UART1 | 115200 baud | Command + telemetry |
 | NVM flash | Self-write | On change | Config storage (last flash page) |
 | Status stream | Main loop | Configurable | P:E:V:T:F:M:A:Q:QL telemetry |
 
@@ -340,16 +340,34 @@ raw_vel = profile_vel + pid_trim
 | Aspect | Value |
 |--------|-------|
 | Motor steps/rev | 200 (NEMA17, 1.8°/step) |
-| Microstep (S4–S6 all ON) | 1/16 |
-| Steps per revolution | 3200 |
+| Microstep setting | **1/32** (S4 ON, S5 ON, S6 ON) |
+| Steps per revolution | **6400** |
 | Encoder PPR | 4096 (AS5047U) |
 | Encoder counts/rev (4× QEI) | 16384 |
 | Position resolution | 360° / 16384 = **0.022°** per count |
+
+## Voltage-Dependent Limits
+
+At **1/32 microstep** (6400 steps/rev). Firmware accepts any positive value; the
+practical limit is set by the motor driver and supply voltage. Empirically determined
+guidelines (no load, idle condition):
+
+| Supply Voltage | MAXV (steps/s) | MAXV (RPM) | ACCEL (steps/s²) | Notes |
+|----------------|----------------|------------|------------------|-------|
+| 24V | 80,000 | 750 | 5,000,000 | Full speed/accel — exceeding causes lost steps |
+| 12V | 50,000 | 469 | 5,000,000 | Reduced max velocity at same acceleration |
+
+Going beyond these values at the respective voltages will cause the motor to lose
+steps or stall. ACCEL = 5,000,000 works at both voltages; only MAXV needs derating
+at 12V.
+
+**RPM formula:** `RPM = (steps/s × 60) ÷ steps_per_rev` where `steps_per_rev = 6400` at 1/32.
 
 ## Releases
 
 | Tag | Date | Description |
 |-----|------|-------------|
+| **v6.1.0** | 2026-06-17 | **SPLL clock (48 MHz), 115200 baud, no command limits.** FRC→SPLL migration. All clock timing fixed. MAXV/ACCEL/JERK upper limits removed. Dashboard TLM toggle. |
 | **v6.0.0** | 2026-06-15 | **Phase 1 complete.** `docs/BUGS_AND_LESSONS.md` — full 24+ bug knowledge base. Dashboard activeElement input protection. |
 | **v5.2.0** | 2026-06-12 | Multi-point queue (Q=/q:), DWELL, QSTOP, dashboard queue card |
 | **v5.1.4** | 2026-06-12 | Dashboard UI ranges match firmware; ACCEL/JERK number inputs; accuracy ±1–3 counts |

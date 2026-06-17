@@ -1,0 +1,5 @@
+device PIC32MK0512MCJ064
+hwtool PKOB4 -p
+set programoptions.eraseb4program true
+program "/Users/adithya/MPLABXProjects/controller.X/dist/default/production/controller.X.production.hex"
+quit

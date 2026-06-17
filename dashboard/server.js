@@ -5,7 +5,7 @@ const { SerialPort } = require('serialport');
 const path = require('path');
 
 const PORT = process.env.UI_PORT || 3000;
-const DEFAULT_BAUD = parseInt(process.env.SERIAL_BAUD || '19200', 10);
+const DEFAULT_BAUD = parseInt(process.env.SERIAL_BAUD || '115200', 10);
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: (res) => { res.setHeader('Cache-Control', 'no-store'); } }));
@@ -130,6 +130,21 @@ function parseLine(line) {
   if (qidx) result.qidx = parseInt(qidx[1], 10);
   const dwell = /DWELL=(\d+)/.exec(line);
   if (dwell) result.dwell = parseInt(dwell[1], 10);
+  const tlm = /TLM=(\d+)/.exec(line);
+  if (tlm) result.tlmEnabled = parseInt(tlm[1], 10) === 1;
+  // Position/error/velocity from GET response (T=...,P=...,E=...,V=...)
+  const tp = /T=(-?\d+)/.exec(line);
+  if (tp) result.target = parseInt(tp[1], 10);
+  const pp = /P=(-?\d+)/.exec(line);
+  if (pp) result.position = parseInt(pp[1], 10);
+  const ep = /E=(-?\d+)/.exec(line);
+  if (ep) result.error = parseInt(ep[1], 10);
+  const vp = /V=(-?\d+)/.exec(line);
+  if (vp) result.velocity = parseInt(vp[1], 10);
+  const tol = /TOL=(-?\d+)/.exec(line);
+  if (tol) result.tol = parseInt(tol[1], 10);
+  const ft = /FT=(-?\d+)/.exec(line);
+  if (ft) result.ft = parseInt(ft[1], 10);
   // OK TUNE:Kp=<n>,Ki=<n>,Kd=<n>,amp=<n>,Tu=<n>
   const tune = /OK TUNE:Kp=(-?\d+),Ki=(-?\d+),Kd=(-?\d+),amp=(-?\d+),Tu=(-?\d+)/.exec(line);
   if (tune) {

@@ -48,6 +48,7 @@ const els = {
   btnTune: document.getElementById('btn-tune'),
   tuneStatus: document.getElementById('tune-status'),
   statusTune: document.getElementById('status-tune'),
+  btnTlm: document.getElementById('btn-tlm'),
 };
 
 let selectedPort = null;
@@ -132,7 +133,7 @@ function hideModal() { els.modal.classList.remove('active'); }
 async function connectToPort() {
   if (!selectedPort) return;
   els.btnConnect.disabled = true; els.modalError.textContent = '';
-  const baud = parseInt(document.getElementById('baud-input').value, 10) || 19200;
+  const baud = parseInt(document.getElementById('baud-input').value, 10) || 115200;
   try {
     const res = await fetch('/api/connect', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -176,6 +177,10 @@ ws.onmessage = (event) => {
     if (data.jerk !== undefined && document.activeElement !== els.jerkInput && !isPending(els.jerkInput)) els.jerkInput.value = data.jerk;
     if (data.maxv !== undefined && document.activeElement !== els.maxvInput && !isPending(els.maxvInput)) els.maxvInput.value = data.maxv;
     if (data.dwell !== undefined && document.activeElement !== els.dwellInput && !isPending(els.dwellInput)) els.dwellInput.value = data.dwell;
+    if (data.tlmEnabled !== undefined) {
+      els.btnTlm.textContent = data.tlmEnabled ? 'Telemetry: ON' : 'Telemetry: OFF';
+      els.btnTlm.className = 'btn btn-small ' + (data.tlmEnabled ? 'btn-active' : '');
+    }
     if (data.qlen !== undefined && data.qidx !== undefined) {
       if (data.qlen > 0) {
         els.queueStatus.textContent = `${data.qidx} / ${data.qlen}`;
@@ -273,6 +278,8 @@ els.btnHome.addEventListener('click', () => sendCmd('HOME'));
 els.btnZero.addEventListener('click', () => sendCmd('ZERO'));
 
 els.btnClear.addEventListener('click', () => sendCmd('CLEAR'));
+
+els.btnTlm.addEventListener('click', () => sendCmd('TLM'));
 
 els.kpSlider.addEventListener('input', () => {
   const val = parseInt(els.kpSlider.value, 10);

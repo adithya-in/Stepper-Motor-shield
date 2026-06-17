@@ -1,5 +1,42 @@
 # Changelog
 
+## v6.1.0 — 2026-06-17
+
+Clock architecture migrated from FRC (8 MHz) to SPLL (48 MHz) for reliable 115200 baud
+serial. All clock-dependent timing formulas updated. Command parameter upper limits removed.
+
+### Added
+- **`flash.mdb`** — MDB programming script for command-line flashing
+- **Dashboard telemetry toggle button** — `tlm:0`/`tlm:1` via button in UI
+- **`#include <sys/attribs.h>`** — for `__ISR` macro on XC32 v5.10
+
+### Changed
+- **Clock: FRC (8 MHz) → SPLL (48 MHz)** — `FPLLIDIV=DIV_2`, `FPLLMULT=MUL_24`, `FPLLODIV=DIV_2`
+- **PB_CLOCK: 4 MHz → 48 MHz** — 12× peripheral bus speed improvement
+- **Baud rate: 19200 → 115200** — U1BRG=25 (0.16% error at 48 MHz PB clock)
+- **`msleep()` corrected** — `ms * 4000u` → `MS(ms)` for 24 MHz core timer (was 4 MHz)
+- **`motor_set_speed()` corrected** — `500000/sps` → `(PB_CLOCK/8)/sps` for 6 MHz Timer2 (was 500 kHz)
+- **Auto-tune Tu corrected** — `/4000.0f` → `/ ((float)TICKS_PER_MS * 1000.0f)` for 24 MHz core timer
+- **Config save timer corrected** — `PB_CLOCK/10` → `MS(100)` for correct 100 ms debounce at 24 MHz
+- **`CONFIG_DATA_WORDS: 11 → 12`** — fixes checksum validation (struct layout includes padding)
+- **MAXV: upper limit removed** — any positive value accepted (was ≤ 100000)
+- **ACCEL: upper limit removed** — any ≥ 100 value accepted (was ≤ 5000000)
+- **JERK: upper limit removed** — any ≥ 1000 value accepted (was ≤ 10000000)
+- **`m:` command speed limit removed** — any positive speed accepted (was ≤ 100000)
+- **TOL/FT command parsing simplified** — removed ERR RANGE branches, validation retained
+- **Dashboard default baud: 19200 → 115200** — in server.js, app.js, index.html
+- **Server parses TLM enable state, position/error/velocity from GET** — T=, P=, E=, V=, TOL=, FT= fields
+- **README/PINOUT/TESTS microstep corrected** — 1/32 microstep documentation (6400 steps/rev)
+- **`nbproject/Makefile-local-default.mk`** — updated MPLAB X IDE path for v6.30
+
+### Bug Fixes
+- **Integer overflow in `tlm_ticks` calculation** — added `(uint32_t)` cast for safe multiplication
+- **Dashboard telemetry state not reflected** — added TLM button with live ON/OFF state
+- **Dashboard server missed position/error from GET** — now parses T=, P=, E=, V=, TOL=, FT= fields
+
+### Removed
+- **All hard-coded upper limits on MAXV, ACCEL, JERK** — firmware now accepts any value the hardware can physically handle
+
 ## v6.0.0 — 2026-06-15
 
 Phase 1 complete. Comprehensive bug/troubleshooting documentation, activeElement input

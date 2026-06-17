@@ -14,7 +14,7 @@ void setup() {
 }
 
 void loop() {
-  // 5 revs CW at 1/16 microstep (3200 steps/rev)
+  // 2.5 revs CW at 1/32 microstep (6400 steps/rev)
   for (int i = 0; i < 16000; i++) {
     digitalWrite(PUL_PIN, HIGH);
     delayMicroseconds(50);

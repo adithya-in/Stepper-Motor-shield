@@ -1,14 +1,19 @@
 #include <xc.h>
 #include <sys/attribs.h>
 
-#pragma config FNOSC   = FRC
-#pragma config POSCMOD = OFF
-#pragma config FWDTEN  = OFF
-#pragma config FDMTEN  = OFF
-#pragma config ICESEL  = ICS_PGx2
-#pragma config JTAGEN  = OFF
+#pragma config FNOSC     = SPLL
+#pragma config POSCMOD   = OFF
+#pragma config FPLLIDIV  = DIV_2
+#pragma config FPLLMULT  = MUL_24
+#pragma config FPLLODIV  = DIV_2
+#pragma config FWDTEN    = OFF
+#pragma config FDMTEN    = OFF
+#pragma config ICESEL    = ICS_PGx2
+#pragma config JTAGEN    = OFF
 
-#define PB_CLOCK      4000000
+#define PB_CLOCK      48000000
+#define TICKS_PER_MS  24000
+#define MS(n)         ((uint32_t)(n) * TICKS_PER_MS)
 #define DIR_CW        0
 #define DIR_CCW       1
 #define ENA_ON        0
@@ -46,7 +51,7 @@ static int32_t coil_current = 800;  // mA
 static uint16_t microstep = 16;
 static uint32_t tlm_period = 100;   // ms
 static uint8_t tlm_enabled = 1;
-static uint32_t tlm_ticks = (PB_CLOCK * 100) / 1000;
+static uint32_t tlm_ticks = ((uint32_t)PB_CLOCK * 100) / 1000;
 
 // ── Auto-tune ──
 #define TUNE_IDLE      0
@@ -86,7 +91,7 @@ static inline uint32_t core_ticks(void);
 // ── NVM Config (non-volatile flash storage) ──
 #define CONFIG_ADDR   0x1D07F000
 #define CONFIG_MAGIC  0xBEADC0DE
-#define CONFIG_DATA_WORDS 11
+#define CONFIG_DATA_WORDS 12
 
 typedef struct {
     int32_t  Kp, Ki, Kd;
@@ -163,7 +168,7 @@ static inline uint32_t core_ticks(void) { return _CP0_GET_COUNT(); }
 
 static void msleep(uint32_t ms) {
     uint32_t start = core_ticks();
-    while ((core_ticks() - start) < (ms * 4000u));
+    while ((core_ticks() - start) < MS(ms));
 }
 
 static void syskey_unlock(void) {
@@ -179,7 +184,7 @@ static void uart_init(void) {
     ANSELECLR = (1 << 0); TRISECLR = (1 << 0);
     ANSELGCLR = (1 << 8); TRISGSET = (1 << 8);
     U1MODE = 0;
-    U1BRG = (PB_CLOCK / (16 * 19200)) - 1;
+    U1BRG = (PB_CLOCK / (16 * 115200)) - 1;
     U1MODEbits.UARTEN = 1; U1STAbits.UTXEN = 1; U1STAbits.URXEN = 1;
 }
 
@@ -246,7 +251,7 @@ static void motor_init(void) {
 
 static void motor_set_speed(uint32_t steps_per_sec) {
     if (steps_per_sec == 0) { OC1CONbits.ON = 0; T2CONbits.ON = 0; return; }
-    uint32_t pr = 500000 / steps_per_sec;
+    uint32_t pr = (PB_CLOCK / 8) / steps_per_sec;
     if (pr < 2) pr = 2;
     if (pr > 65535) pr = 65535;
     PR2 = pr - 1; OC1R = pr >> 1; OC1RS = pr >> 1;
@@ -303,7 +308,7 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
                 int32_t amp = (tune_peak_max_sum + tune_peak_min_sum) / (2 * tune_full_cycles);
                 if (amp < 1) amp = 1;
                 tune_amplitude = amp;
-                float Tu = (float)(tune_period_sum / tune_full_cycles) * 2.0f / 4000.0f;
+                float Tu = (float)(tune_period_sum / tune_full_cycles) * 2.0f / ((float)TICKS_PER_MS * 1000.0f);
                 tune_period_ms = (uint32_t)(Tu * 1000.0f);
                 float Ku = 4.0f * tune_relay_vel / (3.14159265f * amp);
                 Kp = (int32_t)(0.6f * Ku * 100.0f);
@@ -505,31 +510,31 @@ static void parse_command(const char *cmd) {
     else if (cmd[0] == 'M' && cmd[1] == 'A' && cmd[2] == 'X' && cmd[3] == 'V' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 100000) { max_vel = val; config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n"); }
-        else { uart_puts("ERR RANGE\r\n"); }
+        if (val > 0) max_vel = val;
+        config_mark_dirty(); uart_puts("OK MAXV="); uart_putint(max_vel); uart_puts("\r\n");
     }
     else if (cmd[0] == 'T' && cmd[1] == 'O' && cmd[2] == 'L' && cmd[3] == '=') {
         int32_t val = 0; const char *p = cmd + 4;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 0 && val <= 1000) { tolerance = val; config_mark_dirty(); uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n"); }
-        else { uart_puts("ERR RANGE\r\n"); }
+        if (val >= 0 && val <= 1000) tolerance = val;
+        config_mark_dirty(); uart_puts("OK TOL="); uart_putint(tolerance); uart_puts("\r\n");
     }
     else if (cmd[0] == 'F' && cmd[1] == 'T' && cmd[2] == '=') {
         int32_t val = 0; const char *p = cmd + 3;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val > 0 && val <= 100000) { fault_thr = val; config_mark_dirty(); uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n"); }
-        else { uart_puts("ERR RANGE\r\n"); }
+        if (val > 0 && val <= 100000) fault_thr = val;
+        config_mark_dirty(); uart_puts("OK FT="); uart_putint(fault_thr); uart_puts("\r\n");
     }
     else if (cmd[0] == 'A' && cmd[1] == 'C' && cmd[2] == 'C' && cmd[3] == 'E' && cmd[4] == 'L' && cmd[5] == '=') {
         int32_t val = 0; const char *p = cmd + 6;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 100 && val <= 5000000) accel_limit = val;
+        if (val >= 100) accel_limit = val;
         config_mark_dirty(); uart_puts("OK ACCEL="); uart_putint(accel_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'J' && cmd[1] == 'E' && cmd[2] == 'R' && cmd[3] == 'K' && cmd[4] == '=') {
         int32_t val = 0; const char *p = cmd + 5;
         while (*p >= '0' && *p <= '9') { val = val * 10 + (*p - '0'); p++; }
-        if (val >= 1000 && val <= 10000000) jerk_limit = val;
+        if (val >= 1000) jerk_limit = val;
         config_mark_dirty(); uart_puts("OK JERK="); uart_putint(jerk_limit); uart_puts("\r\n");
     }
     else if (cmd[0] == 'O' && cmd[1] == 'N') {
@@ -654,7 +659,7 @@ static void parse_command(const char *cmd) {
             pos *= sign;
         }
         queue_active = 0; queue_len = 0; queue_idx = 0;
-        if (speed > 0 && speed <= 100000) max_vel = speed;
+        if (speed > 0) max_vel = speed;
         target_pos = pos; fault = 0; fault_cnt = 0; integral = 0; sm_vel = 0; sm_acc = 0; vfrac = 0;
         uart_puts("OK m:"); uart_putint(speed); uart_puts(":"); uart_putint(target_pos); uart_puts("\r\n");
     }
@@ -804,7 +809,7 @@ int main(void) {
     uint32_t last_status = core_ticks();
     for (;;) {
         uart_poll();
-        if (config_dirty && ((core_ticks() - config_save_time) >= (PB_CLOCK / 10))) {
+        if (config_dirty && ((core_ticks() - config_save_time) >= MS(100))) {
             config_dirty = 0; config_save();
         }
         if (tlm_enabled && ((core_ticks() - last_status) >= tlm_ticks)) {
