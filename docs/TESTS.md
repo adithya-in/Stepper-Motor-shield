@@ -159,15 +159,15 @@ Web-based control running on Node.js/Express with WebSocket:
 
 Constant PID: Kp=10, Ki=5, Kd=0, 24V supply. Varying MAXV, Accel, and coil current to characterize high-speed limits.
 
-| MAXV (steps/s) | Accel (steps/s²) | Kp | Ki | Kd | Voltage | Coil Current (A) | Idle Current (A) | Result |
-|---|---|---|---|---|---|---|---|---|
-| 250000 | 3200000 | 10 | 5 | 0 | 24V | 3.5–4 | 0.676 | Smooth with heating |
-| 250000 | 3200000 | 10 | 5 | 0 | 24V | 3–3.2 | 0.662 | Smooth with heating |
-| 250000 | 3200000 | 10 | 5 | 0 | 24V | 2.8–2.9 | 0.642 | Smooth with heating |
-| 250000 | 3200000 | 10 | 5 | 0 | 24V | 2.5–2.7 | 0.550 | Smooth with heating |
-| 230000 | 3300000 | 10 | 5 | 0 | 24V | 2–2.2 | 0.292 | Smooth with heating |
-| 200000 | 1900000 | 10 | 5 | 0 | 24V | 1.5–1.7 | 0.223 | Minute Shuttering |
-| 200000 | 190000 | 10 | 5 | 0 | 24V | 1–1.2 | 0.112 | **Motor Stuck** |
+| MAXV (steps/s) | Belt Speed (m/s) | RPM | Accel (steps/s²) | Kp | Ki | Kd | V | Coil Current (A) | Idle A | Result |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 3.5–4 | 0.676 | Smooth with heating |
+| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 3–3.2 | 0.662 | Smooth with heating |
+| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 2.8–2.9 | 0.642 | Smooth with heating |
+| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 2.5–2.7 | 0.550 | Smooth with heating |
+| 230000 | 1.44 | 2156 | 3300000 | 10 | 5 | 0 | 24V | 2–2.2 | 0.292 | Smooth with heating |
+| 200000 | 1.25 | 1875 | 1900000 | 10 | 5 | 0 | 24V | 1.5–1.7 | 0.223 | Minute Shuttering |
+| 200000 | 1.25 | 1875 | 190000 | 10 | 5 | 0 | 24V | 1–1.2 | 0.112 | **Motor Stuck** |
 
 **Conclusion:** At 250k steps/s (3.2M steps/s² accel), minimum reliable coil current is 2.5–2.7A. At 230k/3.3M, 2–2.2A is sufficient. Below 2A with high speed, shuttering or stalling occurs.
 
