@@ -223,9 +223,15 @@ ws.onmessage = (event) => {
       els.kiSlider.value = data.ki;
       els.kdSlider.value = data.kd;
       els.kdLabel.textContent = data.kd;
-      els.tuneStatus.textContent = `Done (amp=${data.tuneAmp}, Tu=${data.tunePeriod}ms)`;
+      els.tuneStatus.textContent = 'Complete';
       els.tuneStatus.className = 'tune-status done';
       els.statusTune.textContent = 'Complete';
+      document.getElementById('tune-kp').textContent = data.kp;
+      document.getElementById('tune-ki').textContent = data.ki;
+      document.getElementById('tune-kd').textContent = data.kd;
+      document.getElementById('tune-amp').textContent = data.tuneAmp;
+      document.getElementById('tune-tu').textContent = data.tunePeriod;
+      document.getElementById('tune-result').style.display = 'block';
     }
     updateTimestamp();
   } catch (e) {}

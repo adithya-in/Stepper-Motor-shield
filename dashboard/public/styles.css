@@ -130,6 +130,7 @@ main {
 .tune-status { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
 .tune-status.active { color: var(--orange); }
 .tune-status.done { color: var(--green); }
+.tune-result { font-size: 0.8rem; color: var(--green); margin: 4px 0 0 0; font-family: 'Menlo', monospace; background: var(--surface); padding: 4px 8px; border-radius: 4px; display: inline-block; }
 
 /* Queue */
 .queue-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }

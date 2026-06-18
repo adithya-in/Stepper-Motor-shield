@@ -129,6 +129,10 @@
         <button id="btn-tune" class="btn btn-primary">Auto-Tune</button>
         <span id="tune-status" class="tune-status">Idle</span>
       </div>
+      <div id="tune-result" class="tune-result" style="display:none;">
+        Kp=<span id="tune-kp">0</span>  Ki=<span id="tune-ki">0</span>  Kd=<span id="tune-kd">0</span>
+        amp=<span id="tune-amp">0</span>  Tu=<span id="tune-tu">0</span>ms
+      </div>
       <div class="pid-row">
         <label>Tolerance: <input type="number" id="tol-input" value="5" min="0" max="1000" class="pid-num"> counts</label>
         <button id="btn-tol" class="btn btn-small">Set</button>
