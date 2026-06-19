@@ -222,6 +222,8 @@ ws.onmessage = (event) => {
       els.kpSlider.value = data.kp;
       els.kiSlider.value = data.ki;
       els.kdSlider.value = data.kd;
+      els.kpLabel.textContent = data.kp;
+      els.kiLabel.textContent = data.ki;
       els.kdLabel.textContent = data.kd;
       els.tuneStatus.textContent = 'Complete';
       els.tuneStatus.className = 'tune-status done';
