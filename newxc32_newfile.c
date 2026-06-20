@@ -314,9 +314,9 @@ void __ISR(_TIMER_3_VECTOR, IPL4AUTO) control_isr(void) {
                 Kp = (int32_t)(0.6f * Ku * 100.0f);
                 Ki = (int32_t)(1.2f * Ku * 100.0f / (Tu * CONTROL_FREQ));
                 Kd = (int32_t)(0.075f * Ku * Tu * CONTROL_FREQ * 100.0f);
-                if (Kp < 0) Kp = 0;
-                if (Ki < 0) Ki = 0;
-                if (Kd < 0) Kd = 0;
+                if (Kp < 0) Kp = 0; if (Kp > 10000) Kp = 10000;
+                if (Ki < 0) Ki = 0; if (Ki > 1000) Ki = 1000;
+                if (Kd < 0) Kd = 0; if (Kd > 10000) Kd = 10000;
                 tune_state = TUNE_COMPLETE;
                 tune_output = 0;
             }

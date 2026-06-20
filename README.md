@@ -50,9 +50,9 @@ so the dashboard and existing scripts continue working.
 | `PROFILE=S` | S-curve — jerk-limited smooth transitions | — |
 | `PROFILE=T` | Trapezoidal — instant acceleration changes | — |
 | **PID Tuning** | | |
-| `KP=<n>` | Proportional gain | 0–9999 |
-| `KI=<n>` | Integral gain | 0–9999 |
-| `KD=<n>` | Derivative gain | 0–9999 |
+| `KP=<n>` | Proportional gain | 0–99999 |
+| `KI=<n>` | Integral gain | 0–99999 |
+| `KD=<n>` | Derivative gain | 0–99999 |
 | `TOL=<n>` | At-target tolerance | 0–1000 counts |
 | `FT=<n>` | Fault threshold (checked only at rest) | 1–100000 counts |
 | **Diagnostics** | | |
@@ -165,6 +165,25 @@ OK pid:30:2:5
 T=10000,P=10000,E=0,V=0,KP=30,KI=2,KD=5,...
 ```
 
+### Auto-Tune
+
+Relay-based Ziegler-Nichols PID tuning. The motor oscillates around a target, measures ultimate gain (Ku) and period (Tu), then applies:
+
+```
+Kp = 0.6 × Ku × 100    (capped at 10000)
+Ki = 1.2 × Ku / Tu      (capped at 1000)
+Kd = 0.075 × Ku × Tu    (capped at 10000)
+```
+
+Send `TUNE` to start. The motor will:
+1. Move to current position + 3000 counts
+2. Begin relay oscillation (±3000 steps/s relay velocity)
+3. After 4+ full cycles, compute PID gains
+4. Report: `OK TUNE:Kp=...,Ki=...,Kd=...,amp=...,Tu=...`
+5. Return to original target
+
+Caps on auto-tune output prevent excessive gains that cause oscillation — particularly Kd, which can destabilize the motor at high values.
+
 ### Telemetry Stream
 
 ```
@@ -256,6 +275,7 @@ pid_trim    = (Kp·error + Ki·integral + Kd·derivative) / 100
 ```
 
 Anti-windup: integral resets during moves, only active near target.
+Auto-tune output capped at Kp≤10000, Ki≤1000, Kd≤10000 to prevent excessive gains.
 
 ## Wiring
 
@@ -292,10 +312,13 @@ dashboard/
 - Position display: target / actual with bar indicator
 - Status: error, velocity, fault, moving, at-target
 - Motor Test card: ON/OFF, CW/CCW, speed slider (up to 50000 steps/s)
-- PID sliders: Kp, Ki
+- PID sliders: Kp (0–50000), Ki (0–10000), Kd (0–50000)
+- Auto-tune button: relay-based Ziegler-Nichols tuning, results shown with slider label sync
+- TLM toggle: enable/disable telemetry stream
 - Motion Profile: S-curve / Trapezoidal toggle
 - ACCEL and JERK number inputs with Set buttons
 - MAXV, Tolerance, Fault Threshold inputs
+- GET response parsing: position, error, velocity, TOL, FT fields
 
 ### Architecture
 
@@ -354,12 +377,15 @@ guidelines (no load, idle condition):
 
 | Supply Voltage | MAXV (steps/s) | MAXV (RPM) | ACCEL (steps/s²) | Notes |
 |----------------|----------------|------------|------------------|-------|
-| 24V | 80,000 | 750 | 5,000,000 | Full speed/accel — exceeding causes lost steps |
-| 12V | 50,000 | 469 | 5,000,000 | Reduced max velocity at same acceleration |
+| 31V | 280,000 | 2,625 | 2,700,000 | Best reliable: 1725 mm/s, Kp=2121 Ki=46 |
+| 24V | 250,000 | 2,344 | 3,200,000 | At ≥2.5A coil current, smooth with heating |
+| 12V | 50,000 | 469 | 5,000,000 | Reduced max velocity |
 
-Going beyond these values at the respective voltages will cause the motor to lose
-steps or stall. ACCEL = 5,000,000 works at both voltages; only MAXV needs derating
-at 12V.
+**31V characterization** (from `docs/TESTS.md`):
+- MAXV 300k with 3.2M ACCEL reaches 1902 mm/s (Kp 50–1000, Ki=5, Kd=0)
+- Kp >~2000 with Ki > 0 causes oscillation at 31V; best results use moderate Kp
+- Trade-off: higher MAXV requires lower ACCEL and vice versa
+- Kd was 0 in all 31V tests — derivative not needed with proper Kp/Ki balance
 
 **RPM formula:** `RPM = (steps/s × 60) ÷ steps_per_rev` where `steps_per_rev = 6400` at 1/32.
 
@@ -367,6 +393,7 @@ at 12V.
 
 | Tag | Date | Description |
 |-----|------|-------------|
+| **v6.2.0** | 2026-06-20 | **Auto-tune caps restored, 31V test data.** Kp≤10000/Ki≤1000/Kd≤10000 caps restored on auto-tune output (prevents oscillation from excessive gains). 31V characterization: 280k MAXV / 2.7M ACCEL / 1725 mm/s reliable belt speed. |
 | **v6.1.0** | 2026-06-17 | **SPLL clock (48 MHz), 115200 baud, no command limits.** FRC→SPLL migration. All clock timing fixed. MAXV/ACCEL/JERK upper limits removed. Dashboard TLM toggle. |
 | **v6.0.0** | 2026-06-15 | **Phase 1 complete.** `docs/BUGS_AND_LESSONS.md` — full 24+ bug knowledge base. Dashboard activeElement input protection. |
 | **v5.2.0** | 2026-06-12 | Multi-point queue (Q=/q:), DWELL, QSTOP, dashboard queue card |

@@ -160,14 +160,14 @@ Web-based control running on Node.js/Express with WebSocket:
 Constant PID: Kp=10, Ki=5, Kd=0, 24V supply. Varying MAXV, Accel, and coil current to characterize high-speed limits.
 
 | MAXV (steps/s) | Belt Speed (m/s) | RPM | Accel (steps/s²) | Kp | Ki | Kd | V | Coil Current (A) | Idle A | Result |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 3.5–4 | 0.676 | Smooth with heating |
-| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 3–3.2 | 0.662 | Smooth with heating |
-| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 2.8–2.9 | 0.642 | Smooth with heating |
-| 250000 | 1.56 | 2344 | 3200000 | 10 | 5 | 0 | 24V | 2.5–2.7 | 0.550 | Smooth with heating |
-| 230000 | 1.44 | 2156 | 3300000 | 10 | 5 | 0 | 24V | 2–2.2 | 0.292 | Smooth with heating |
-| 200000 | 1.25 | 1875 | 1900000 | 10 | 5 | 0 | 24V | 1.5–1.7 | 0.223 | Minute Shuttering |
-| 200000 | 1.25 | 1875 | 190000 | 10 | 5 | 0 | 24V | 1–1.2 | 0.112 | **Motor Stuck** |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 250,000 | 1.56 | 2,344 | 3,200,000 | 10 | 5 | 0 | 24V | 3.5–4 | 0.676 | Smooth with heating |
+| 250,000 | 1.56 | 2,344 | 3,200,000 | 10 | 5 | 0 | 24V | 3–3.2 | 0.662 | Smooth with heating |
+| 250,000 | 1.56 | 2,344 | 3,200,000 | 10 | 5 | 0 | 24V | 2.8–2.9 | 0.642 | Smooth with heating |
+| 250,000 | 1.56 | 2,344 | 3,200,000 | 10 | 5 | 0 | 24V | 2.5–2.7 | 0.550 | Smooth with heating |
+| 230,000 | 1.44 | 2,156 | 3,300,000 | 10 | 5 | 0 | 24V | 2–2.2 | 0.292 | Smooth with heating |
+| 200,000 | 1.25 | 1,875 | 1,900,000 | 10 | 5 | 0 | 24V | 1.5–1.7 | 0.223 | Minute Shuttering |
+| 200,000 | 1.25 | 1,875 | 190,000 | 10 | 5 | 0 | 24V | 1–1.2 | 0.112 | **Motor Stuck** |
 
 **Conclusion:** At 250k steps/s (3.2M steps/s² accel), minimum reliable coil current is 2.5–2.7A. At 230k/3.3M, 2–2.2A is sufficient. Below 2A with high speed, shuttering or stalling occurs.
 
@@ -238,6 +238,35 @@ rm -rf ~/.mplabcomm
 /Applications/microchip/mplabx/v6.30/mplab_platform/bin/mdb.sh flash.mdb
 # Must power-cycle PKoB4 after flashing (VCOM gets stuck)
 ```
+
+---
+
+---
+
+## Motor Test Results — 31V Test Data
+
+Constant PID varies. 31V supply. Systematic sweep of ACCEL, MAXV, and PID gains to characterize high-speed performance at 31V.
+
+| Voltage | Accel (steps/s²) | MAXV (steps/s) | Kp | Ki | Kd | Measured Velocity | Target (counts) | Result |
+|---------|-----------------|---------------|----|----|----|--------------------|-----------------|--------|
+| 31V | 3,200,000 | 300,000 | 50 | 5 | 0 | 1670 mm/s | 25,000 | Smooth with heating |
+| 31V | 3,200,000 | 300,000 | 50 | 5 | 0 | 1780 mm/s | 25,000 | Smooth with heating |
+| 31V | 3,200,000 | 300,000 | 1000 | 5 | 0 | 1902 mm/s | 25,000 | Smooth with heating |
+| 31V | 1,400,000 | 300,000 | 1092 | 0 | 0 | 1445 mm/s | 25,000 | Smooth with heating |
+| 31V | 1,700,000 | 300,000 | 1092 | 46 | 0 | 1610 mm/s | 25,000 | Not Smooth |
+| 31V | 1,700,000 | 300,000 | 3000 | 46 | 0 | 1543 mm/s | 25,000 | Smooth with oscillation |
+| 31V | 1,800,000 | 300,000 | 3000 | 46 | 0 | — | 25,000 | **Stuck** |
+| 31V | 1,700,000 | 310,000 | 3000 | 46 | 0 | 1470 mm/s | 25,000 | **Stuck** |
+| 31V | 2,000,000 | 240,000 | 1050 | 46 | 0 | 1440 mm/s | 25,000 | Smooth with heating |
+| 31V | 2,700,000 | 270,000 | 1934 | 46 | 0 | 1669 mm/s | 25,000 | Smooth with heating |
+| 31V | 2,700,000 | 280,000 | 2121 | 46 | 0 | 1725 mm/s | 25,000 | Smooth with heating |
+
+**Key Findings at 31V:**
+- **300k MAXV / 3.2M ACCEL** works with moderate Kp (50–1000) and Ki=5, Kd=0 — best measured velocity 1902 mm/s
+- **High Kp (3000) + Ki (46)** causes oscillation or stalling — Kp >~2000 at 31V is unstable with nonzero Ki
+- **MAXV > 300k requires lower ACCEL** trade-off: 280k MAXV + 2.7M ACCEL works, 310k MAXV + 1.7M ACCEL does not
+- **Best reliable result:** 270k MAXV + 2.7M ACCEL, Kp=2121, Ki=46 — 1725 mm/s smooth
+- **Kd=0** in all tests — derivative gain not needed at 31V with proper Kp/Ki balance
 
 ---
 
