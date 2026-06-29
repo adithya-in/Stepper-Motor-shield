@@ -5,6 +5,18 @@ magnetic encoder feedback. Controlled over USB serial (115200 baud) or web dashb
 
 **Achieved accuracy: ±1–3 encoder counts = 0.022°–0.066°** (limited by encoder noise floor).
 
+**Clock speed note:** All testing done at **48 MHz** SYSCLK (SPLL from 8 MHz FRC). Target production clock is **10 MHz** (external crystal or lower PLL) — testing pending.
+
+## Project Status
+
+| Area | Status |
+|------|--------|
+| **Firmware** | **Complete** — v6.2.0 tested and verified at 48 MHz (SPLL, 115200 baud, auto-tune capped) |
+| **Hardware testing** | **Complete** — NEMA17 + TB6600 characterized at 24V and 31V (see test data below) |
+| **Schematic** | **Complete** — KiCad schematic for PIC32MK + TMC2660 + AS5047D + CAN + USB-C (`hardware/Motorshield v6.kicad_sch`) |
+| **PCB layout** | **In progress** — routing and layout yet to be finished |
+| **10 MHz migration** | **Pending** — clock-dependent formulas need recalculation and retesting |
+
 ## Quick Start
 
 ```bash
@@ -328,6 +340,8 @@ Firmware (PIC32MK) ←→ Serial (115200) ←→ server.js ←→ WebSocket ←�
 
 ## Firmware Architecture
 
+**Clock:** Currently runs at **48 MHz** (SPLL from 8 MHz FRC). Target for production: **10 MHz** — all clock-dependent formulas (core timer, UART baud, step pulse generation, auto-tune timing) will need recalculation. Testing at 10 MHz is pending.
+
 | Component | Peripheral | Rate | Purpose |
 |-----------|-----------|------|---------|
 | Position loop | Timer3 ISR | 1 kHz | Profile → PID trim → smoother → velocity |
@@ -377,9 +391,9 @@ guidelines (no load, idle condition):
 
 | Supply Voltage | MAXV (steps/s) | MAXV (RPM) | ACCEL (steps/s²) | Notes |
 |----------------|----------------|------------|------------------|-------|
-| 31V | 280,000 | 2,625 | 2,700,000 | Best reliable: 1725 mm/s, Kp=2121 Ki=46 |
-| 24V | 250,000 | 2,344 | 3,200,000 | At ≥2.5A coil current, smooth with heating |
-| 12V | 50,000 | 469 | 5,000,000 | Reduced max velocity |
+| 31V | 280,000 | 2,625 | 2,700,000 | Best reliable: 1725 mm/s, Kp=2121 Ki=46. All tests at 48 MHz — 10 MHz testing pending |
+| 24V | 250,000 | 2,344 | 3,200,000 | At ≥2.5A coil current, smooth with heating. All tests at 48 MHz — 10 MHz testing pending |
+| 12V | 50,000 | 469 | 5,000,000 | Reduced max velocity. All tests at 48 MHz — 10 MHz testing pending |
 
 **31V characterization** (from `docs/TESTS.md`):
 - MAXV 300k with 3.2M ACCEL reaches 1902 mm/s (Kp 50–1000, Ki=5, Kd=0)

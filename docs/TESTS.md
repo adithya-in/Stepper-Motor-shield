@@ -175,6 +175,8 @@ Constant PID: Kp=10, Ki=5, Kd=0, 24V supply. Varying MAXV, Accel, and coil curre
 
 ## Phase 4: v6.1.0 — SPLL Clock, 115200 Baud, No Limits
 
+> **Clock note:** All testing in this phase (and all 31V data) was performed at **48 MHz** SYSCLK (SPLL). Target production clock is **10 MHz** (external crystal or lower PLL config). All clock-dependent formulas (UART baud, Timer2/OC1 step rate, Timer3 ISR, core ticks, auto-tune timing) will need recalculation and retesting at 10 MHz — pending.
+
 ### Clock Migration (FRC → SPLL)
 
 The firmware was migrated from FRC (8 MHz) to SPLL (48 MHz) to enable reliable 115200 baud serial communication:
@@ -247,21 +249,21 @@ rm -rf ~/.mplabcomm
 
 Constant PID varies. 31V supply. Systematic sweep of ACCEL, MAXV, and PID gains to characterize high-speed performance at 31V.
 
-| Voltage | Accel (steps/s²) | MAXV (steps/s) | Kp | Ki | Kd | Measured Velocity | Target (counts) | Result |
-|---------|-----------------|---------------|----|----|----|--------------------|-----------------|--------|
-| 31V | 3,200,000 | 300,000 | 50 | 5 | 0 | 1670 mm/s | 25,000 | Smooth with heating |
-| 31V | 3,200,000 | 300,000 | 50 | 5 | 0 | 1780 mm/s | 25,000 | Smooth with heating |
-| 31V | 3,200,000 | 300,000 | 1000 | 5 | 0 | 1902 mm/s | 25,000 | Smooth with heating |
-| 31V | 1,400,000 | 300,000 | 1092 | 0 | 0 | 1445 mm/s | 25,000 | Smooth with heating |
-| 31V | 1,700,000 | 300,000 | 1092 | 46 | 0 | 1610 mm/s | 25,000 | Not Smooth |
-| 31V | 1,700,000 | 300,000 | 3000 | 46 | 0 | 1543 mm/s | 25,000 | Smooth with oscillation |
-| 31V | 1,800,000 | 300,000 | 3000 | 46 | 0 | — | 25,000 | **Stuck** |
-| 31V | 1,700,000 | 310,000 | 3000 | 46 | 0 | 1470 mm/s | 25,000 | **Stuck** |
-| 31V | 2,000,000 | 240,000 | 1050 | 46 | 0 | 1440 mm/s | 25,000 | Smooth with heating |
-| 31V | 2,700,000 | 270,000 | 1934 | 46 | 0 | 1669 mm/s | 25,000 | Smooth with heating |
-| 31V | 2,700,000 | 280,000 | 2121 | 46 | 0 | 1725 mm/s | 25,000 | Smooth with heating |
+| Voltage | Accel (steps/s²) | Vmax (steps/s) | Kp | Ki | Kd | Measured Velocity | Target | Result |
+|---------|-----------------|---------------|----|----|----|--------------------|--------|--------|
+| 31V | 3200000 | 300000 | 50 | 5 | 0 | 1670mm/s | 25000 | Smooth with heating |
+| 31V | 3200000 | 300000 | 50 | 5 | 0 | 1780mm/s | 25000 | Smooth with heating |
+| 31V | 3200000 | 300000 | 1000 | 5 | 0 | 1902mm/s | 25000 | Smooth with heating |
+| 31V | 1400000 | 300000 | 1092 | 0 | 0 | 1445mm/s | 25000 | Smooth with heating |
+| 31V | 1700000 | 300000 | 1092 | 46 | 0 | 1610mm/s | 25000 | Not Smooth |
+| 31V | 1700000 | 300000 | 3000 | 46 | 0 | 1543mm/s | 25000 | Smooth With oscillation |
+| 31V | 1800000 | 300000 | 3000 | 46 | 0 | — | — | **Stuck** |
+| 31V | 1700000 | 310000 | 3000 | 46 | 0 | 1470mm/s | — | **Stuck** |
+| 31V | 2000000 | 240000 | 1050 | 46 | 0 | 1440mm/s | 25000 | Smooth with heating |
+| 31V | 2700000 | 270000 | 1934 | 46 | 0 | 1669mm/s | 25000 | Smooth with heating |
+| 31V | 2700000 | 280000 | 2121 | 46 | 0 | 1725mm/s | 25000 | Smooth with heating |
 
-**Key Findings at 31V:**
+**Key Findings at 31V (all at 48 MHz — 10 MHz testing pending):**
 - **300k MAXV / 3.2M ACCEL** works with moderate Kp (50–1000) and Ki=5, Kd=0 — best measured velocity 1902 mm/s
 - **High Kp (3000) + Ki (46)** causes oscillation or stalling — Kp >~2000 at 31V is unstable with nonzero Ki
 - **MAXV > 300k requires lower ACCEL** trade-off: 280k MAXV + 2.7M ACCEL works, 310k MAXV + 1.7M ACCEL does not
